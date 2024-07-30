@@ -4,7 +4,7 @@
 ## 1. Introduction 
 
   This repo contains scripts, namlists and everything needed to reproduce figures from the paper "Atmosphere Response To An Oceanic Sub-mesoscale SST Front" avalaible [here](DOI to be added).
-  Steps to reproduce the simulations are detailed, but you will need a beefy computer ! I used 512 CPUs for the simulations.
+  Steps to reproduce the simulations are detailed, but you will need a beefy computer ! I used 512 CPUs for the simulations. You can also directly download data from zenodo : [part1](link), [part2](link).
   
   This is Work In Progress !
 
@@ -100,5 +100,7 @@ You now have the data necessary to post process the simulation !
   ### 3.3 Plotting
   
    
+## 4. Licences
+
 
 
