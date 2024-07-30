@@ -5,7 +5,7 @@
 
   This repo contains scripts, namlists and everything needed to reproduce figures from the paper "Atmosphere Response To An Oceanic Sub-mesoscale SST Front" avalaible [here](DOI to be added).
   Steps to reproduce the simulations are detailed, but you will need a beefy computer ! I used 512 CPUs for the simulations. You can also directly download data from zenodo : [part1](link), [part2](link).
-  Figures are produced using Python, Xarray and Matplotlib while the simulations where done with MesoNH.
+  Figures are produced using Python, Xarray and Matplotlib while the simulations were done with MesoNH.
   
   This is Work In Progress !
 
