@@ -104,7 +104,7 @@
   
   ### 3.2 What is the plan ?
   Plotting the figures requires some data post processing. In a first time, a few files are built. Then data from those files are used to plot the figures.
-  The user cannot plot figures without these files. There is four python script that you can found here [link to files]:
+  The user cannot plot figures without these files. There are four python script that you can found here [link to files]:
   - `analyse.py` is the main program. This is where you can chose what to plot.
   - `module_cst.py` gather all constants like gravitational acceleration, gas constants, ...
   - `module_phy.py` where all procedures called in `analyse.py` are defined.
