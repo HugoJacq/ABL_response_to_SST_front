@@ -8,6 +8,10 @@
   Figures are produced using Python, Xarray and Matplotlib while the simulations were done with MesoNH.
 
   If you need help running the scripts or running the simulations, please open an issue and i'll try to have a look.
+
+  The plan is :
+  - Produce the data (install MesoNH, run the simulations)
+  - Plot the figures (environment, running the scripts)
   
   This is Work In Progress !
 
