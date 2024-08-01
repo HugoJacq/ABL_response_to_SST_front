@@ -120,8 +120,6 @@
   ```
   python analyse.py
   ```
-  
-## 4. Licences
 
 
 
