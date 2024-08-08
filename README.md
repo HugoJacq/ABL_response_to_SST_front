@@ -97,6 +97,8 @@
   - the MesoNH profile with the profile you created in the last section
   - the number of CPUs for the 3rd and 4th step (I used 512)
 
+Hardware: I used 512 CPU to run the simulations, producing [TO BE COMPLETED] Go (77Go for S1, XX for RefC and XX for RefW).
+
   **Launching the simulations**
   
   Then, run the program (e.g. the initialization part) with `./run_prep_ideal` on your PC or something like `sbatch run_prep_ideal` on a supercomputer.
