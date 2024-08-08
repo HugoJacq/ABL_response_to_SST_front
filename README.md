@@ -85,18 +85,45 @@
 
   ### 2.2 Running the simulations
   
+  **Workflow**
+  
   MesoNH uses Namlists to provide inputs to a simulation. The simulations that we want to produce are idealized case and so there are three steps when preparing a simulation: 
   - Initialize the 3D fields with user-provided profiles (PRE_IDEAL.nam)
-  - Run a spinup period (EXSEG1_spinup.nam)
-  - Run the simulation (EXSEG1_run.nam)
+  - Change the SST for S1 (replace_sst.py)
+  - Run a spinup period (EXSEG1.nam.spinup)
+  - Run the simulation (EXSEG1.nam.run)
   
   Namlits can be found at [link to namlists]. Three simulations are done : one with the SST front (S1), and two homogeneous simulations (refC and refW).
-  For each simulation, there is three folders: one for each step in the simulation. For each step, you will need to adapt:  
+  . For each step, you will need to adapt:  
   - the workload manager (slurm, ...)
   - the MesoNH profile with the profile you created in the last section
-  - the number of CPUs for the 2nd and 3rd step (i used 512)
+  - the number of CPUs for the 3rd and 4th step (I used 512)
+
+  **Launching the simulations**
   
   Then, run the program (e.g. the initialization part) with `./run_prep_ideal` on your PC or something like `sbatch run_prep_ideal` on a supercomputer.
+  
+  For S1:
+  - ./run_prep_ideal
+  - python replace_sst.py
+  - ./run_spinup
+  - ./run_mesonh
+
+  For RefC and RefW:
+  - ./run_prep_ideal
+  - ./run_mesonh
+
+  **Outputs**
+
+  In the main folder:
+  - Initial 3D fields `INIT_CANAL_SST.nc` and surface fields `INIT_CANAL_PGD.nc`
+  - BACKUP files `CAS06.1.001*` (spinup) or `CAS06.1.002*` (main run)
+  - Logs of the simulations in `OUTPUT_LISTING1_ideal` and `OUTPUT_LISTING1_mnh`
+  In the folder `FICHIERS_OUT`,
+  - High frequency outputs, `CAS06.1.001*` for spinup and `CAS06.1.002*` for main run
+
+  For reference simulations, you will have an added file `CAS06.1.001.000.nc` (diachronic file) which contains output from online LES computations (mean, fluxes, ...)
+  
   You now have the data necessary to post process the simulation !
 
 ## 3. Plotting the figures
