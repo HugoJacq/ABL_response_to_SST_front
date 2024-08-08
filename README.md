@@ -18,7 +18,7 @@
 ## 2. Producing the data
   ### 2.1 Installation of MesoNH
   
-  The code used is MesoNH 5.6.1 ([Lafore et al. 2018](https://doi.org/10.5194/gmd-11-1929-2018)) and it can be downloaded from [here](http://mesonh.aero.obs-mip.fr/mesonh56/Download). Look for the row with "MASDEV5-6 BUG1" and click on the tar link.
+  The code used is MesoNH 5.6.2 ([Lafore et al. 2018](https://doi.org/10.5194/gmd-11-1929-2018)) and it can be downloaded from [here](http://mesonh.aero.obs-mip.fr/mesonh56/Download). Look for the row with "MASDEV5-6 BUG1" and click on the tar link.
   Basic installation instructions will be given here but you can also look at the 'A-Install' file inside the archive. It is assumed that you are using a linux machine, with a sourced version of mpi and a fortran compiler.
   
   % Here insert a image with arrows that describe the actions to do.
