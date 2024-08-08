@@ -1,4 +1,4 @@
-# Atmospheric Response To An Oceanic Sub-mesoscale SST Front
+# Atmospheric Response to an Oceanic Sub-mesoscale SST Front : a Coherent Structure Analysis
 
 
 ## 1. Introduction 
@@ -20,8 +20,6 @@
   
   The code used is MesoNH 5.6.2 ([Lafore et al. 2018](https://doi.org/10.5194/gmd-11-1929-2018)) and it can be downloaded from [here](http://mesonh.aero.obs-mip.fr/mesonh56/Download). Look for the row with "MASDEV5-6 BUG1" and click on the tar link.
   Basic installation instructions will be given here but you can also look at the 'A-Install' file inside the archive. It is assumed that you are using a linux machine, with a sourced version of mpi and a fortran compiler.
-  
-  % Here insert a image with arrows that describe the actions to do.
   
   Once you have downloaded the archive, uncompress it somewhere that will not be erased (typically the $HOME directory, and not the $WORKDIR on supercomputer):
   
