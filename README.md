@@ -102,21 +102,44 @@ Hardware: I used 512 CPU to run the simulations, producing [TO BE COMPLETED] Go 
 **Launching the simulations**
 
 Then, run the program (e.g. the initialization part) with `./run_prep_ideal` on your PC or something like `sbatch run_prep_ideal` on a supercomputer.
+I advise to run each step at once.
 
 For S1:
-- ./run_prep_ideal
-- python replace_sst.py
-- ./run_spinup
-- ./run_mesonh
+```
+./run_prep_ideal
+python replace_sst.py
+./run_spinup
+./run_mesonh
+```
 
 For RefC and RefW:
-- ./run_prep_ideal
-- ./run_mesonh
+```
+./run_prep_ideal
+./run_mesonh
+```
+For radioactive decay (nu) sensitivity analysis: \
+In the folder `radio_decay_sensitivity`, you will find another folder called `Namlist_injector`. Inside, a python script will create the namlists to run the sensitivity analysis.
+Before running the commands below, modify in `setup.py` your mesonh profile (lines 18->27) and if needed the header of the string `txt_run` according to your HPC format (line 148).
+Then, simply type: 
+```
+cd radio_decay_sensitivity/Namlist_injector
+python setup.py
+```
+You will now have one folder for each radioactive decay in the parent folder. The simulations are re-doing the last hour of RefC, changing only the radioactive decay time. To run the simulations for each radioactive decay time,
+go the each directory and launch the executable. For example, for $\nu$ = 7min, run
+```
+cd ../7min
+./run_mesonh
+```
+or on a supercomputer
+```
+cd ../7min
+sbatch run_mesonh
+```
 
-For nu sensitivity: TBD
-**Outputs**
+**Outputs description**
 
-In the main folder:
+For each simulations, you have in the main folder:
 - Initial 3D fields `INIT_CANAL_SST.nc` and surface fields `INIT_CANAL_PGD.nc`
 - BACKUP files `CAS06.1.001*` (spinup) or `CAS06.1.002*` (main run)
 - Logs of the simulations in `OUTPUT_LISTING1_ideal` and `OUTPUT_LISTING1_mnh`
