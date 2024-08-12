@@ -131,7 +131,7 @@ Hardware: I used 512 CPU to run the simulations, producing [TO BE COMPLETED] Go 
   ### 3.1 Required packages
 
 - Python
-- Xarray
+- Xarray (with dask)
 - SciPy
 - Matplotlib
 - Numpy
@@ -145,7 +145,7 @@ Hardware: I used 512 CPU to run the simulations, producing [TO BE COMPLETED] Go 
   - `module_tool.py` is a toolbox that gather small functions used in `module_phy.py`
   ### 3.3 Plotting
   You will need to modify the path where the data is stored in `analyse.py` in the first lines. By default, the program will only build the postprocess files and will not plot any figures.
-  Building those files can be long depending on your machine. Then, let's say you want to plot figure 1, set `FIG1=True`, and if you want to plot all figures, set `FIGALL=True`.
+  Building those files can be long depending on your machine. Then, let's say you want to plot figure 1, set `NUM_FIG=1`, and if you want to plot all figures, set `NUM_FIG=-1`.
   Figures will be saved in the current directory.
 
   To start the postprocess/plotting, simply type
