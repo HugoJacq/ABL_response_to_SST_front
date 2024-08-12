@@ -130,11 +130,13 @@ Hardware: I used 512 CPU to run the simulations, producing [TO BE COMPLETED] Go 
 ## 3. Plotting the figures
   ### 3.1 Required packages
 
-- Python
-- Xarray (with dask)
-- SciPy
-- Matplotlib
-- Numpy
+Packages necessary to run the post process (the version indicated is the one I used) :
+
+- Python  (3.11.8)
+- Xarray (with dask) (2024.2.0)
+- SciPy (1.12)
+- Matplotlib (3.6.3)
+- Numpy (1.26.4)
   
   ### 3.2 What is the plan ?
   Plotting the figures requires some data post processing. In a first time, a few files are built. Then data from those files are used to plot the figures.
