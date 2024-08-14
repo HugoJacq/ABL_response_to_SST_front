@@ -177,6 +177,8 @@ To start the postprocess/plotting, simply type
 ```
 python analyse.py
 ```
+## Licence
 
+If you reuse this work, please cite the [paper](link), the archived zenodo repositories [part1](link) and [part2](link). 
 
 
