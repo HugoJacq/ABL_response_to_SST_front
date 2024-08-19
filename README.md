@@ -232,6 +232,11 @@ To start the postprocess/plotting, simply type
 ```
 python analyse.py
 ```
+
+**Notes**
+
+Due to the intrinsec nature of turbulence, the figure from the annexe A1 and the figure 2 cannot be reproduced exactly: the small differences of computing architecture introduce slightly different boundary and initial conditions and so the flow instantaneous structure is different.
+
 ## Licence
 
 If you reuse this work, please cite the [paper](link), the archived zenodo repositories [part1](link) and [part2](link). 
