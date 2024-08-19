@@ -193,13 +193,13 @@ RefC/
 └───FICHIERS_OUT/
 │   │   CAS09.1.001.OUT.001.nc
 radio_decay_sensitivity/
-|   Namlist_injector/
+└───Namlist_injector/
 |   |   setup.py
-|   1min/
-|   4min/
+└───1min/
+└───4min/
 |   [...]
-|   40min/
-│   │   FICHIERS_OUT/
+└───40min/
+│   └───FICHIERS_OUT/
 │   │   |   NU40m.1.003.OUT.001.nc
 ```
 
