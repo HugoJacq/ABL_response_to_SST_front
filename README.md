@@ -101,6 +101,31 @@ Hardware: I used 512 CPU to run the simulations, producing [TO BE COMPLETED] Go 
 
 **Launching the simulations**
 
+First make sure you have the proper folder structure with namlists:
+```
+S1/
+│   PRE_IDEA1.nam
+│   EXSEG1.nam.spinup
+│   EXSEG1.nam.run
+|   replaceSST.py
+|   run_mesonh
+|   run_prep_ideal
+|   run_spinup
+RefW/
+│   PRE_IDEA1.nam
+|   EXSEG1.nam
+|   run_mesonh
+|   run_prep_ideal
+RefC/
+│   PRE_IDEA1.nam
+|   EXSEG1.nam
+|   run_mesonh
+|   run_prep_ideal
+radio_decay_sensitivity/
+└───Namlist_injector/
+|   |   setup.py
+```
+
 Then, run the program (e.g. the initialization part) with `./run_prep_ideal` on your PC or something like `sbatch run_prep_ideal` on a supercomputer.
 I advise to run each step at once.
 
@@ -147,6 +172,36 @@ In the folder `FICHIERS_OUT`,
 - High frequency outputs, `CAS06.1.001*` for spinup and `CAS06.1.002*` for main run
 
 For reference simulations, you will have an added file `CAS06.1.001.000.nc` (diachronic file) which contains output from online LES computations (mean, fluxes, ...)
+
+Here is the tree of the output of data, with the files needed for the post-process step:
+```
+S1/
+│   CAS06.1.002.002.nc
+│   INIT_CANAL_SST.nc    
+└───FICHIERS_OUT/
+│   │   CAS06.1.002.OUT.001.nc
+│   │   [...]
+│   │   CAS06.1.002.OUT.121.nc
+RefW/
+│   CAS10.1.001.000.nc
+|   CAS10.1.001.003.nc
+└───FICHIERS_OUT/
+│   │   CAS10.1.001.OUT.001.nc 
+RefC/
+│   CAS09.1.001.000.nc
+|   CAS09.1.001.003.nc
+└───FICHIERS_OUT/
+│   │   CAS09.1.001.OUT.001.nc
+radio_decay_sensitivity/
+|   Namlist_injector/
+|   |   setup.py
+|   1min/
+|   4min/
+|   [...]
+|   40min/
+│   │   FICHIERS_OUT/
+│   │   |   NU40m.1.003.OUT.001.nc
+```
 
 You now have the data necessary to post process the simulation !
 
