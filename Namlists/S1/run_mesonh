@@ -1,0 +1,39 @@
+#!/bin/bash
+#SBATCH -J RUNMNH
+#SBATCH -N 4           # nodes number (=NBP)   
+#SBATCH -n 512         # CPUs number (on all nodes) (=NBP*TPN) 
+#SBATCH -o RUNMNH.eo%j   #
+#SBATCH -e RUNMNH.eo%j   #
+#SBATCH -t 02:30:00    # time limit
+
+set -x # Echo des commandes
+ulimit -c 0
+ulimit -s unlimited
+set -e # Arret du job des la premiere erreur
+
+# Nom de la machine
+hostname
+
+# HERE CHANGE THE PROFILE WITH YOURS
+. /home/cnrm_other/ge/mrmc/jacqueth/MNH-V5-6-2/conf/profile_mesonh-LXifort-R8I4-MNH-V5-6-2-2tracers_SBGinOUT-MPIAUTO-O3
+#. /home/jacqhugo/MNH-V5-6-2/conf/profile_mesonh-LXgfortran-R8I4-MNH-V5-6-2-2tracers_SBGinOUT-MPIAUTO-DEBUG
+
+mkdir -p FICHIERS_OUT
+cp EXSEG1.nam.run EXSEG1.nam
+
+
+#export MPIRUN="Mpirun -np 30 --map-by :OVERSUBSCRIBE" # 512
+export MPIRUN="Mpirun -np 512 " # 512
+#export TIMEOUT="timelimit -t 86400" #259200=3j 86400=1j
+
+rm -f file_for_xtransfer pipe_name
+
+ls -lrt
+#time $MPIRUN ~escobar/MPI/iping_ipong_bi_10it_check_network_intel2019_ompi4051 # pour voir si un noeud a un probleme
+#${TIMEOUT} time -v ${MPIRUN} MESONH${XYZ} # local cmd
+time ${MPIRUN} MESONH${XYZ} #belenos cmd
+mv -f OUTPUT_LISTING1  OUTPUT_LISTING1_mnh
+mv -f OUTPUT_LISTING0  OUTPUT_LISTING0_mnh
+
+rm -f REMAP*
+ls -lrt
