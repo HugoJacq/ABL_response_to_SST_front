@@ -235,7 +235,7 @@ python analyse.py
 
 **Notes**
 
-Due to the intrinsec nature of turbulence, the figure from the annexe A1 and the figure 2 cannot be reproduced exactly: the small differences of computing architecture introduce slightly different boundary and initial conditions and so the flow instantaneous structure is different.
+Due to the intrinsec chaotic nature of turbulence, the figure from the annexe A1 and the figure 2 cannot be reproduced exactly: the small differences of computing architecture introduce slightly different boundary and initial conditions and so the flow instantaneous structure is different.
 
 ## Licence
 
