@@ -199,7 +199,7 @@ radio_decay_sensitivity/
 └───4min/
 |   [...]
 └───40min/
-│   └───FICHIERS_OUT/
+    └───FICHIERS_OUT/
         |   NU40m.1.003.OUT.001.nc
 ```
 
