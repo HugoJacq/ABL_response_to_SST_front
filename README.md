@@ -123,7 +123,7 @@ RefC/
 |   run_prep_ideal
 radio_decay_sensitivity/
 └───Namlist_injector/
-|   |   setup.py
+    |   setup.py
 ```
 
 Then, run the program (e.g. the initialization part) with `./run_prep_ideal` on your PC or something like `sbatch run_prep_ideal` on a supercomputer.
@@ -179,28 +179,28 @@ S1/
 │   CAS06.1.002.002.nc
 │   INIT_CANAL_SST.nc    
 └───FICHIERS_OUT/
-│   │   CAS06.1.002.OUT.001.nc
-│   │   [...]
-│   │   CAS06.1.002.OUT.121.nc
+    │   CAS06.1.002.OUT.001.nc
+    │   [...]
+    │   CAS06.1.002.OUT.121.nc
 RefW/
 │   CAS10.1.001.000.nc
 |   CAS10.1.001.003.nc
 └───FICHIERS_OUT/
-│   │   CAS10.1.001.OUT.001.nc 
+    │   CAS10.1.001.OUT.001.nc 
 RefC/
 │   CAS09.1.001.000.nc
 |   CAS09.1.001.003.nc
 └───FICHIERS_OUT/
-│   │   CAS09.1.001.OUT.001.nc
+    │   CAS09.1.001.OUT.001.nc
 radio_decay_sensitivity/
 └───Namlist_injector/
-|   |   setup.py
+    |   setup.py
 └───1min/
 └───4min/
 |   [...]
 └───40min/
 │   └───FICHIERS_OUT/
-│   │   |   NU40m.1.003.OUT.001.nc
+        |   NU40m.1.003.OUT.001.nc
 ```
 
 You now have the data necessary to post process the simulation !
