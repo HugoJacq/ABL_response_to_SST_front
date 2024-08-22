@@ -13,6 +13,10 @@ The plan is :
 - Produce the data (install MesoNH, run the simulations)
 - Plot the figures (environment, running the scripts)
 
+Diskspace used:
+- about 100Go for the simulations
+- 318Go for the post process (with the files for the supplementary material figure, else it is 130Go)
+
 This is Work In Progress !
 
 ## 2. Producing the data
