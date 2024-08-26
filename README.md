@@ -222,11 +222,15 @@ Packages necessary to run the post process (the version indicated is the one I u
   
 ### 3.2 What is the plan ?
 Plotting the figures requires some data post processing. In a first time, a few files are built. Then data from those files are used to plot the figures.
-The user cannot plot figures without these files. There are four python script that you can found here [link to files]:
+The user cannot plot figures without these files. There are height python script that you can found here [link to files]:
 - `analyse.py` is the main program. This is where you can chose what to plot.
+- `module_building_files.py` were function to produce files for the post process
 - `module_cst.py` gather all constants like gravitational acceleration, gas constants, ...
 - `module_phy.py` where all procedures called in `analyse.py` are defined.
 - `module_tool.py` is a toolbox that gather small functions used in `module_phy.py`
+- `module_CS.py` is a file where you can find functions related to the conditional sampling
+- `module_CS_func.py` are small functions used in `module_CS.py`
+- `module_budget.py` where budgets are computed
 ### 3.3 Plotting
 You will need to modify the path where the data is stored in `analyse.py` in the first lines. By default, the program will only build the postprocess files and will not plot any figures.
 Building those files can be long depending on your machine. Then, let's say you want to plot figure 1, set `NUM_FIG=1`, and if you want to plot all figures, set `NUM_FIG=-1`.
