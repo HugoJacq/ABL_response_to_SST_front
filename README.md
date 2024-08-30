@@ -28,6 +28,8 @@ For your information, producing the simulation data emitted 90 kg of equivalent 
 The paper has been submitted to JGR: Atmosphere and is under peer review.
 
 ## 2. Producing the data
+![alt text](http://mesonh.aero.obs-mip.fr/mesonh57/Welcome?action=AttachFile&do=get&target=LogoMesoNH.jpg)
+
 ### 2.1 Installation of MesoNH
 
 The code used is MesoNH 5.6.2 ([Lafore et al. 2018](https://doi.org/10.5194/gmd-11-1929-2018)) and it can be downloaded from [here](http://mesonh.aero.obs-mip.fr/mesonh56/Download). Look for the row with "MASDEV5-6 BUG2" and click on the tar link.
