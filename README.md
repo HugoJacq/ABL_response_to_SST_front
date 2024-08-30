@@ -29,8 +29,8 @@ Once you have downloaded the archive, uncompress it somewhere that will not be e
 
 ```
 cd ~
-tar xvfz MNH-V5-6-1.tar.gz
-cd MNH-V5-6-1/src
+tar xvfz MNH-V5-6-2.tar.gz
+cd MNH-V5-6-2/src
 ```
 
 If you use Debian or Ubuntu, you should already have gfortran. If you do not have any mpi architecture, a tutorial is available [here](http://mesonh.aero.obs-mip.fr/mesonh56/MesonhTEAMFAQ/PC_Linux) to install one.
@@ -44,7 +44,7 @@ Before compiling, run:
 ```
 and then load the file that has just been created, something like:
 ```
-. ../conf/profile_mesonh-LXgfortran-R8I4-MNH-V5-6-1-MPIAUTO-02
+. ../conf/profile_mesonh-LXgfortran-R8I4-MNH-V5-6-2-MPIAUTO-02
 ```
 Finally, launch the compilation (on 8 cpus for example) with
 ```
