@@ -247,6 +247,12 @@ Due to the intrinsec chaotic nature of turbulence, the figure from the annexe A1
 
 ## Licence
 
-If you reuse this work, please cite the [paper](link), the archived zenodo repositories [part1](link) and [part2](link). 
+If you reuse this work, please cite it !
 
+(citation paper when accepted)
 
+Jacquet, H. (2024). Output of simulations for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis": Part 1 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13321541
+
+Jacquet, H. (2024). Output of simulations for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis": Part 2 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13321835
+
+Jacquet, H. (2024). Scripts and namlists for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis". Zenodo. https://doi.org/10.5281/zenodo.13341468
