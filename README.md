@@ -1,6 +1,6 @@
 # Atmospheric Response to an Oceanic Sub-mesoscale SST Front : a Coherent Structure Analysis
 
-![alt text](https://github.com/HugoJacq/ABL_response_to_SST_front/blob/main/SchemaRecap_lowerRes_withprofiles.png?raw=true)
+![alt text](https://github.com/HugoJacq/ABL_response_to_SST_front/blob/main/06W_LastTime_UVW_XY.png?raw=true)
 
 ## 1. Introduction 
 
