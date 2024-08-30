@@ -73,7 +73,7 @@ export VER_USER=2tracers_AND_SBGinOUT
 export VER_MPI=MPIAUTO
 ./configure
 ```
-and then load the new profile
+and then load the new profile (in a new tab)
 ```
 . ../conf/profile_mesonh-LXgfortran-R8I4-MNH-V5-6-2-2tracers_AND_SBGinOUT-MPIAUTO-02
 ```
@@ -243,7 +243,7 @@ python analyse.py
 
 **Notes**
 
-Due to the intrinsec chaotic nature of turbulence, the figure from the annexe A1 and the figure 2 cannot be reproduced exactly: the small differences of computing architecture introduce slightly different boundary and initial conditions and so the flow instantaneous structure is different.
+Due to the intrinsec chaotic nature of turbulence, the figure from the appendix A1 and the figure 2 cannot be reproduced exactly: the small differences of computing architecture introduce slightly different boundary and initial conditions and so the flow instantaneous structure is different.
 
 ## Licence
 
