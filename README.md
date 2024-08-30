@@ -17,7 +17,9 @@ Diskspace used:
 - about 100Go for the simulations
 - 318Go for the post process (with the files for the supplementary material figure, else it is 130Go)
 
-This is Work In Progress !
+The paper has been submitted to JGR: Atmosphere and is under peer review.
+
+For your information, producing the simulation data generated 90 kg of equivalent carbon.
 
 ## 2. Producing the data
 ### 2.1 Installation of MesoNH
