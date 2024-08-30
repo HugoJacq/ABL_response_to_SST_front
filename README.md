@@ -59,7 +59,7 @@ Ok fine, you now have a working installation of MesoNH. The results from the pap
 - output subgrid flux
 - emit two tracers at the surface depending on the SST
 
-In a new command window, move the files from the folder [Insert path of github modif] to the folder `2tracers_AND_SBGinOUT` in the source directory of MesoNH:
+In a new command window, move the files from [here](https://github.com/HugoJacq/ABL_response_to_SST_front/tree/main/MNH_user_modif_code) to the folder `2tracers_AND_SBGinOUT` in the source directory of MesoNH:
 ```
 cd ~
 cd MNH-V5-6-2/src
@@ -95,13 +95,13 @@ MesoNH uses Namlists to provide inputs to a simulation. The simulations that we 
 - Run a spinup period (EXSEG1.nam.spinup)
 - Run the simulation (EXSEG1.nam.run)
 
-Namlits can be found at [link to namlists]. Three simulations are done : one with the SST front (S1), and two homogeneous simulations (refC and refW).
+Namlits can be found [here](https://github.com/HugoJacq/ABL_response_to_SST_front/tree/main/Namlists). Three simulations are done : one with the SST front (S1), and two homogeneous simulations (refC and refW).
 . For each step, you will need to adapt:  
 - the workload manager (slurm, ...)
 - the MesoNH profile with the profile you created in the last section
 - the number of CPUs for the 3rd and 4th step (I used 512)
 
-Hardware: I used 512 CPU to run the simulations, producing [TO BE COMPLETED] Go (77Go for S1, XX for RefC and XX for RefW).
+Note on the hardware: I used 512 CPU to run the simulations, producing roughly 100 Go (77 Go for S1, 4 Go for RefC, 4 Go for RefW and 6 Go for the nu sensitivity study).
 
 **Launching the simulations**
 
