@@ -62,7 +62,7 @@ Ok fine, you now have a working installation of MesoNH. The results from the pap
 In a new command window, move the files from the folder [Insert path of github modif] to the folder `2tracers_AND_SBGinOUT` in the source directory of MesoNH:
 ```
 cd ~
-cd MNH-V5-6-1/src
+cd MNH-V5-6-2/src
 mkdir 2tracers_AND_SBGinOUT
 cp 'path/to/the/file' 2tracers_AND_SBGinOUT
 ```
@@ -75,7 +75,7 @@ export VER_MPI=MPIAUTO
 ```
 and then load the new profile
 ```
-. ../conf/profile_mesonh-LXgfortran-R8I4-MNH-V5-6-1-2tracers_AND_SBGinOUT-MPIAUTO-02
+. ../conf/profile_mesonh-LXgfortran-R8I4-MNH-V5-6-2-2tracers_AND_SBGinOUT-MPIAUTO-02
 ```
 compile 
 ```
