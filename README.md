@@ -232,7 +232,7 @@ Packages necessary to run the post process (the version indicated is the one I u
   
 ### 3.2 What is the plan ?
 Plotting the figures requires some data post processing. In a first time, a few files are built. Then data from those files are used to plot the figures.
-The user cannot plot figures without these files. There are height python script that you can found here [link to files]:
+The user cannot plot figures without these files. There are height python script that you can found [here](https://github.com/HugoJacq/ABL_response_to_SST_front/tree/main/Post_process):
 - `analyse.py` is the main program. This is where you can chose what to plot.
 - `module_building_files.py` were function to produce files for the post process
 - `module_cst.py` gather all constants like gravitational acceleration, gas constants, ...
