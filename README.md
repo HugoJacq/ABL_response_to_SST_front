@@ -1,6 +1,6 @@
 # Atmospheric Response to an Oceanic Sub-mesoscale SST Front : a Coherent Structure Analysis
 
-![alt text](https://github.com/HugoJacq/ABL_response_to_SST_front/blob/main/06W_LastTime_UVW_XY.png?raw=true)
+![alt text](https://github.com/HugoJacq/ABL_response_to_SST_front/blob/main/06W_LastTime_UVW_XY_rev1.png?raw=true)
 
 **Figure 2.** Snapshot at t=+3h of (a) zonal and (b) meridional wind at first model level and
 (c) vertical velocity in the middle of the ABL. The colored line at the bottom of the panels in-
