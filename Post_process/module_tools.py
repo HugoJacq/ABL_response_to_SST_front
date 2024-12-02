@@ -5,9 +5,11 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from module_cst import *
+import scipy as sp
 from scipy.ndimage import uniform_filter1d
 from math import factorial
 from numpy.fft import fft, ifft
+import cv2
 
 def DISCRETIZED_2CMAP(cmap1,cmap2,IDX,data,crit_value,coords):
 	"""This function purpose is to discretize in N values a cmap
@@ -147,33 +149,13 @@ def Newton(f,dfdx,eps,guess,Yarray):
 			err = f(x)-y
 			while np.abs(err) > eps or k>1000:
 				k=k+1
-				dydx = dfdksi(x)
+				dydx = dfdx(x)
 				x = x - (f(x)-y)/dfdx(x)
 				err = f(x)-y
 			out[indz] = x
 		return out	
 
-#def OpenALL_OUTFILES(CHOICE):
-#	"""This procedure open the files for the period considered and return the dataset and the period
-#	"""
-#	abs_path = '/home/jacqhugo/scripts/simu_canal_across/'
-#	if CHOICE==1:
-#		dsOUT = xr.open_mfdataset([abs_path+'CAS06/FICHIERS_OUT_2h_to_6h/CAS06.1.003.OUT.0'+f"{k:02}"+'.nc' for k in range(2,50)],combine='nested',concat_dim='time')
-#		what='2h-6h'
-#	elif CHOICE==2:
-#		dsOUT = xr.open_mfdataset([abs_path+'CAS06/FICHIERS_OUT_2h_to_6h/CAS06.1.003.OUT.0'+f"{k:02}"+'.nc' for k in range(2,50)] + 
-#					[abs_path+'CAS06/FICHIERS_OUT_6h_to_10h/CAS06.1.004.OUT.0'+f"{k:02}"+'.nc' for k in range(2,50)],combine='nested',concat_dim='time')
-#		what='2h-10h'
-#	elif CHOICE==3:
-#		dsOUT = xr.open_mfdataset([abs_path+'CAS06/FICHIERS_OUT_2h_to_6h/CAS06.1.003.OUT.0'+f"{k:02}"+'.nc' for k in range(2,50)] + 
-#					[abs_path+'CAS06/FICHIERS_OUT_6h_to_10h/CAS06.1.004.OUT.0'+f"{k:02}"+'.nc' for k in range(2,50)] +
-#					[abs_path+'CAS06/FICHIERS_OUT_10h_to_12h/CAS06.1.005.OUT.0'+f"{k:02}"+'.nc' for k in range(2,50)],combine='nested',concat_dim='time')
-#		what='2h-14h'
-#	else:
-#		raise Exception('Wrong choice')
-#	return dsOUT,what
 
-	
 def MovieMaker(dsO,X,Y,Z,path_save,path_save_frames,atZ,dpi,delay):
 	"""This procedure is ploting the wind component and then makes a gif of the frames
 	"""	
@@ -474,20 +456,23 @@ def savitzky_golay(y, window_size, order, deriv=0, rate=1):
 	[2] Numerical Recipes 3rd Edition: The Art of Scientific Computing
 	W.H. Press, S.A. Teukolsky, W.T. Vetterling, B.P. Flannery
 	Cambridge University Press ISBN-13: 9780521880688
+
+	Hugo Jacquet 19 november 2024:
+	- changed np.mat to np.asmatrix for numpy 2.0 compatibility
 	"""
 	try:
-	    window_size = np.abs(int(window_size))
-	    order = np.abs(int(order))
+		window_size = np.abs(int(window_size))
+		order = np.abs(int(order))	
 	except ValueError:
-	    raise ValueError("window_size and order have to be of type int")
+		raise ValueError("window_size and order have to be of type int")
 	if window_size % 2 != 1 or window_size < 1:
-	    raise TypeError("window_size size must be a positive odd number")
+		raise TypeError("window_size size must be a positive odd number")
 	if window_size < order + 2:
-	    raise TypeError("window_size is too small for the polynomials order")
+		raise TypeError("window_size is too small for the polynomials order")
 	order_range = range(order+1)
 	half_window = (window_size -1) // 2
 	# precompute coefficients
-	b = np.mat([[k**i for i in order_range] for k in range(-half_window, half_window+1)])
+	b = np.asmatrix([[k**i for i in order_range] for k in range(-half_window, half_window+1)])
 	m = np.linalg.pinv(b).A[deriv] * rate**deriv * factorial(deriv)
 	# pad the signal at the extremes with
 	# values taken from the signal itself
@@ -515,33 +500,6 @@ def profil_ini_tht(Z,tht0,slope,zi):
 		else:
 			tht[k] = tht0+slope*(z-zi)
 	return tht
-
-# OLD
-#def f_MeanTurb(field,Tstart=0,Tstop=-1,window=20):
-#	"""
-#	Mean operator for turbulent statistics, time mean and Y mean
-#	IN
-#		MNH field of the form DATA(t,z,y,x)
-#		Tstart indice of time to start the mean
-#		Tstop indice of time to stop the mean
-#		window is the size of the window for running average (in points)
-#	OUT
-#		MNH mean field DATA(z,x)
-#	"""
-#	meaned = field[Tstart:Tstop,:,:,:].mean(dim=['time','nj'])
-#	meaned = uniform_filter1d(meaned, size=window,axis=1,mode='wrap')
-#	return meaned
-#def MeanTurb(field,Tstart,Tstop,window):
-#	return xr.apply_ufunc(
-#		f_MeanTurb,
-#			field,
-#			dask="allowed",
-#			input_core_dims=[['time','nj']],
-#			vectorize=True,
-#			kwargs={'Tstart':Tstart,'Tstop':Tstop,'window':window},
-#			keep_attrs=True
-#		)
-
 
 # EXAMPLE OF UFUNC
 #RV = dsO.RVT[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
@@ -691,8 +649,7 @@ def Compute_THTV(THT,RVT):
 	"""
 	return THT*(1+Rv/Rd*RVT)/(1+RVT)
 	
-	
-	
+		
 def spectrum(x,fs):
 	"""
 	Computes the 1D power spectrum of the random variable 'x'
@@ -865,12 +822,165 @@ def periodic_corr(x, y):
     return ifft(fft(x) * fft(y).conj()).real	
 	
 	
+def bugfix_func(path_file):
+	"""
+	This function fix a bug from MNH 5.6.2 and onward.
+	Some variable are written in the BACKUP files with dimensions nj,nj instead of level,nj.
+	We drop those variable as they are not needed for the analysis
+
+	Input = dataset to be modified 
+	"""
+
+	L_VAR = ['LBXUM','LBXVM','LBXWM','LBXTHM','LBXTKEM',
+			'LBXRVM','LBXRCM','LBXRRM','LBXRIM','LBXRSM',
+			'LBXRGM','LBX_SVCS000','LBX_SVCS001','LBX_SVCS002','LBX_SVCS003']	
+	for VAR in L_VAR:
+		print('removing '+VAR+' ...')
+		os.system('ncks -C -O -x -v '+VAR+' '+path_file+' '+path_file)
+
+# added after rev1
+def polar_axis(data, n_theta=-1):
+    '''    
+    This function returns 2 numpy arrays characterizing the polar coordinates 
+    of the output field of the function field_2D_polar:
+ 
+    axis_t, axis_r, size = polar_axis(data, n_theta=-1)
+
+    Input arguments :
+        
+        data  : image to analyze
+        n_theta : nb points desired in the theta direction if =-1: auto-detect (as R_max*pi) 
+        
+    Output arguments :
+        
+        axis_t : vector of angles
+        axis_r : vector of radius
+        size : shape of field in polar coordinates
+        
+    Usage example :
+        
+        image=np.random.randn((1000,1000))
+        axis_t, axis_r, size = polar_axis(image, n_theta=-1)
+
+   
+    ##
+    N.B Garnier (ENS Lyon) and C. Granero-Belinchon (IMT- Atlantique), September 2021
+ 
+    '''  
+
+    Nx,Ny = data.shape
+    R_max = min(Nx//2,Ny//2)
+    N_theta = n_theta if n_theta>0 else (int)(R_max*np.pi)
+    size  = (R_max+1, N_theta)      # N_theta pts in [0,2*pi[ and R (tau) in [O, R_max]
+    axis_t= np.arange(N_theta)/N_theta*2*np.pi - np.pi/2
+    axis_r= np.arange(R_max+1)
+    return axis_t, axis_r, size
+  
+def field_2D_polar(H, n_theta=-1):    
+    '''    
+    This function returns the cartesian field H in polar coordinates. The center of the field is used as origin.
+    First dimension is the angle in [0, 2*pi[, second dimension is the radius in [0, R_max]
+ 
+    H_polar = field_2D_polar(H, n_theta=-1)
+
+    Input arguments :
+        
+        H  : field to analyze
+        n_theta : nb points desired in the theta direction if =-1: auto-detect (as R_max*pi) 
+        
+    Output arguments :
+        
+        H_polar : H field in polar coordinates
+        
+    Usage example :
+        
+        image=np.random.randn((1000,1000))
+        image_polar = field_2D_polar(image, n_theta=-1)
+
+   
+    ##mass_interpolator
+    N.B Garnier (ENS Lyon) and C. Granero-Belinchon (IMT- Atlantique), September 2021
+ 
+    '''  
+
+    Nx,Ny = H.shape
+    H_t= np.transpose(H) # cv2 works on images, which are transposed of matrices
+    origin= (Nx//2, Ny//2) 
+    axis_t, axis_r, size = polar_axis(H, n_theta) # overkill here...
+    R_max = size[0]-1
+    return cv2.warpPolar(H_t, size, origin, R_max, cv2.WARP_POLAR_LINEAR+cv2.INTER_CUBIC) # possible option: cv2.WARP_FILL_OUTLIERS
+
+def mass_interpolator(dsO,chunks):
+	"""
+	This operator is interpolating variables at mass point from a C-grid used in MesoNH
+
+	INPUT : 
+		- ds is a xarray dataset, typically a OUTPUT or BACKUP file from MesoNH simulation
+	OUTPUT
+		- a xarray dataset with interpolated variables
+
+	Note :
+		See end of MesoNH user doc for a schematic of the code grid
+		Grid X -> Grid 1
+
+	"""
+	ds = dsO
+
+	X = ds.ni
+	Y = ds.nj
+	Z = ds.level
+	ds['UT'] = dsO.UT.interp(ni_u=X)				            # Grid : 2
+	ds['VT'] = dsO.VT.interp({'nj_v':Y})				            # Grid : 3
+	ds['WT'] = dsO.WT.interp({'level_w':Z})				        # Grid : 4
+	ds['UW_HFLX'] = dsO.UW_HFLX.interp({'level_w':Z,'ni_u':X}) 	# Grid : 6
+	ds['UW_VFLX'] = dsO.UW_VFLX.interp({'level_w':Z})				    # Grid : 4
+	ds['VW_HFLX'] = dsO.VW_HFLX.interp({'level_w':Z,'nj_v':Y}) 	# Grid : 7
+	ds['VW_VFLX'] = dsO.VW_VFLX.interp({'level_w':Z})				    # Grid : 4
+	ds['THW_FLX'] = dsO.THW_FLX.interp({'level_w':Z})					# Grid : 4
+	ds['RCONSW_FLX'] = dsO.RCONSW_FLX.interp({'level_w':Z})			    # Grid : 4
+	ds['UV_FLX'] = dsO.UV_FLX.interp({'ni_u':X,'nj_v':Y})             # Grid : 5
+	# no need to interp on the following dimensions, 
+	#  they have a different name but are the same as mass point values
+	ds['UT'] = ds.UT.rename(new_name_or_name_dict={'nj_u':'nj'})
+	ds['VT'] = ds.VT.rename(new_name_or_name_dict={'ni_v':'ni'})
+	ds['UW_HFLX'] = ds.UW_HFLX.rename(new_name_or_name_dict={'nj_u':'nj'})
+	ds['VW_HFLX'] = ds.VW_HFLX.rename(new_name_or_name_dict={'ni_v':'ni'})
+
 	
+	ds = ds.isel(ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo))
+	ds = ds.drop_dims(['level_w','ni_u','nj_u','ni_v','nj_v']) # dropping dimensions not needed anymore
+	ds = ds.chunk(chunks)
+	# we need to rechunk as the interpolation step changed them.
+	# another option would be to call .unify_chunks() but then there is a risk that it would messed up other computations
+	#		down the line
+	return ds 
+		
+def Corr_in_polar(var,resolution):
+		""" Computes autocorrelation of 'var' and return in polar coordinates, with lags
+		"""
+		#W = var.sel(level=atZ,method='nearest')
+		W = var
+		variance = W.var().values
+		acorr = sp.signal.correlate2d(W,W,boundary='wrap')
+		acorr = acorr / variance / W.size
+		theta, r, _ = polar_axis(acorr, 180)
+		r = r*resolution
+		theta_res = theta[1]-theta[0]
+		acorr_pol = field_2D_polar(acorr, 180)
+		Nr = len(r)
+		Ntht = len(theta)
+		lag_r = np.arange(0, Nr) * resolution
+		lag_tht = ( np.arange(- Ntht//2, Ntht//2) )*theta_res
+		return acorr_pol,lag_tht,lag_r
 	
-	
-	
-	
-	
+def Roll_factor(acorr,lag_r,zi):
+	""" Computes the roll factor from Salesky et al 2017
+	"""
+	R = acorr.max(axis=0) - acorr.min(axis=0)
+	R = np.ma.masked_where( (lag_r/zi < 0.5),R)
+	R = np.ma.masked_where((lag_r > lag_r[-1]/2),R)
+	R = np.nanmax(R)
+	return R
 	
 	
 	

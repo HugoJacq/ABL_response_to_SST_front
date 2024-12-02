@@ -1,35 +1,17 @@
 # To be used with analyse.py 
 import xarray as xr
-import scipy as sp
-from scipy.interpolate import interpn
 import numpy as np
 import os
 import pathlib
-import matplotlib.pyplot as plt
 from module_cst import *
 from module_tools import *
 from module_CS_func import get_mixed_layer_indexes,Compute_bool_turb
-from pyevtk.hl import *
+import time
 
 
-def bugfix_func(path_file):
-	"""
-	This function fix a bug from MNH 5.6.2 and onward.
-	Some variable are written in the BACKUP files with dimensions nj,nj instead of level,nj.
-	We drop those variable as they are not needed for the analysis
 
-	Input = dataset to be modified 
-	"""
-
-	L_VAR = ['LBXUM','LBXVM','LBXWM','LBXTHM','LBXTKEM',
-			'LBXRVM','LBXRCM','LBXRRM','LBXRIM','LBXRSM',
-			'LBXRGM','LBX_SVCS000','LBX_SVCS001','LBX_SVCS002','LBX_SVCS003']	
-	for VAR in L_VAR:
-		print('removing '+VAR+' ...')
-		os.system('ncks -C -O -x -v '+VAR+' '+path_file+' '+path_file)
-
-def Opening_files(chunksOUT,abs_path,path_BACKUP,path_OUT,path_BUDGET,L_BUDGET,L_OUT,L_BACKUP,L_var_budget,group,path_INI,CHOIX,
-				path_ref,nameGroups):
+def Opening_files(chunksOUT,path_OUT,path_BUDGET,L_BUDGET,L_OUT,L_BACKUP,L_var_budget,group,path_INI,CHOIX,
+				path_ref):
 	"""
 	Master procedure that open all files.
 		-> complete file (BACKUP) in dsB
@@ -448,7 +430,6 @@ def Build_flx_file(path_in,dsO,Tstart,Tstop,dsmean,name_fluc,nhalo,window):
 	print('	saving')
 	ds_fluc.to_netcdf(path=name_fluc,mode='w')  
 	
-
 def Build_budget_file(path_in,path_ini,dsB,dsO,dsmean,Tstart,Tstop,name_budget,nhalo,window):
 	"""
 	This procedure is building a file with U,V,W,THT,TKE budget components.
@@ -477,21 +458,28 @@ def Build_budget_file(path_in,path_ini,dsB,dsO,dsmean,Tstart,Tstop,name_budget,n
 	"""
 	if 'PABST' not in dsO.keys():
 		raise Exception('No pressure in OUTPUT files') 
-	
+	starttime = time.time()
 	dsINI = xr.open_dataset(path_ini)
 	
+	# Interpolation au pt de masse
+	print('	starting interpolation')
+	chunksNOHALO_interp = {'time':-1,
+				'level':16,
+				'nj':21,
+				'ni':-1}
+	dsO_i = mass_interpolator(dsO,chunksNOHALO_interp)
+
 	# Attention à bien interpoler au pt de masse
-	X = dsO.ni[nhalo:-nhalo].values
-	Y = dsO.nj[nhalo:-nhalo].values
-	Z = dsO.level[nhalo:-nhalo].values
-	Z_w = dsO.level_w[nhalo:-nhalo].values
-	Time = dsO.time
+	X = dsO_i.ni.values
+	Y = dsO_i.nj.values
+	Z = dsO_i.level.values
+	#Z_w = dsO_i.level_w.values
+	#Time = dsO_i.time
 	U_frc = 7.5	# m s-1
 	
-	THT = dsO.THT[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 		# grid 1
-	RVT = dsO.RVT[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 		# grid 1
-	LM = dsO.LM[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 			# grid 1
-	P = dsO.PABST[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 		# grid 1
+	THT = dsO_i.THT 		# grid 1
+	RVT = dsO_i.RVT 		# grid 1
+	P = dsO_i.PABST 		# grid 1
 	Pi = Exner(P)
 	#Pi_ref = Exner(dsINI.PABST[:,:,nhalo:-nhalo,nhalo:-nhalo].mean(dim=['time','ni','nj']))
 	#Pi_ref = xr.DataArray(data=Pi_ref,coords={'level':dsO.level},name='Pi_ref')
@@ -501,59 +489,37 @@ def Build_budget_file(path_in,path_ini,dsB,dsO,dsmean,Tstart,Tstop,name_budget,n
 	# ref is average over xyt
 	THTv_ref = THTv.mean(dim=['time','nj','ni'])
 	P_ref = P.mean(dim=['time','nj','ni'])
-	RHOREF = P_ref/(Rd*Exner(P_ref)*THTv_ref) 
+	#RHOREF = P_ref/(Rd*Exner(P_ref)*THTv_ref) 
 	
-	TKE = dsO.TKET[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 		# grid 1
-	U_VAR = dsO.U_VAR[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]		# Grid : 1
-	V_VAR = dsO.V_VAR[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]		# Grid : 1
-	W_VAR = dsO.W_VAR[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]		# Grid : 1
-	thtvref3D =  ( dsINI.THT*(1+1.61*dsINI.RVT)/(1+dsINI.RVT))[0,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] # Grid : 1
-	# Interpolation au pt de masse
-	print('	starting interpolation')
-	U = dsO.UT.interp({'ni_u':dsO.ni})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 					# grid : 2
-	V = dsO.VT.interp({'nj_v':dsO.nj})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 					# grid : 3
-	W = dsO.WT.interp({'level_w':dsO.level})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 				# grid : 4
-	UW_HFLX = dsO.UW_HFLX.interp({'level_w':dsO.level,'ni_u':dsO.ni})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 	# Grid : 6
-	UW_VFLX = dsO.UW_VFLX.interp({'level_w':dsO.level})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]			# Grid : 4
-	VW_HFLX = dsO.VW_HFLX.interp({'level_w':dsO.level,'nj_v':dsO.nj})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 	# Grid : 7
-	VW_VFLX = dsO.VW_VFLX.interp({'level_w':dsO.level})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]			# Grid : 4
-	THW_FLX = dsO.THW_FLX.interp({'level_w':dsO.level})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]			# Grid : 4
-	RCONSW_FLX = dsO.RCONSW_FLX.interp({'level_w':dsO.level})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]		# Grid : 4
-	UV_FLX = dsO.UV_FLX.interp({'ni_u':dsO.ni,'nj_v':dsO.nj})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]		# Grid : 5
-	rhoref = dsB.RHOREFZ.interp({'level_w':dsO.level})[nhalo:-nhalo]						# Grid : 4
-	#thtvref = dsB.THVREFZ.interp({'level_w':dsO.level})[0,nhalo:-nhalo]						# Grid : 4
-															
-	# We need to rename dimensions at mass point before doing any calculation
-	U = U.rename(new_name_or_name_dict={'nj_u':'nj'})
-	V = V.rename(new_name_or_name_dict={'ni_v':'ni'})
-	UW_HFLX = UW_HFLX.rename(new_name_or_name_dict={'nj_u':'nj'})
-	VW_HFLX = VW_HFLX.rename(new_name_or_name_dict={'ni_v':'ni'})
+	TKE = dsO_i.TKET 		# grid 1
+	U_VAR = dsO_i.U_VAR		# Grid : 1
+	#V_VAR = dsO_i.V_VAR	# Grid : 1
+	#W_VAR = dsO_i.W_VAR		# Grid : 1
+	#thtvref3D =  ( dsINI.THT*(1+1.61*dsINI.RVT)/(1+dsINI.RVT))[0,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] # Grid : 1
+	
+	U,V,W = dsO_i.UT,dsO_i.VT,dsO_i.WT
+	UW_HFLX = dsO_i.UW_HFLX
+	UW_VFLX = dsO_i.UW_VFLX
+	VW_HFLX = dsO_i.VW_HFLX
+	VW_VFLX = dsO_i.VW_VFLX
+	THW_FLX = dsO_i.THW_FLX
+	#RCONSW_FLX = dsO_i.RCONSW_FLX
+	UV_FLX = dsO_i.UV_FLX														
 	
 	UW_FLX = UW_HFLX + UW_VFLX
 	VW_FLX = VW_HFLX + VW_VFLX
-	THvW_FLX = THW_FLX*THTv/THT + 0.61*THT*RCONSW_FLX 
+	#THvW_FLX = THW_FLX*THTv/THT + 0.61*THT*RCONSW_FLX 
 	
-	# reshaping mean fields 
-	print('	reshaping ...')
-	dsmean['nj'] = Y
-	dsmean['time'] = Time
-	dsmean.set_coords(['nj','time'])
-	
-	Um,Vm,Wm,THm,RVm,THvm,Pm = Complete_dim_like([dsmean.Um,dsmean.Vm,dsmean.Wm,dsmean.THTm,dsmean.RVTm,dsmean.THTvm,dsmean.Pm],U)
-	#rhoref.drop_vars('time')
-	rhoref = rhoref.expand_dims(dim={'time':Time,'nj':Y,'ni':X},axis=(0,2,3))[:,:,:,:]
-	#thtvref3D.drop_vars('time')
-	thtvref3D = thtvref3D.expand_dims(dim={'time':Time},axis=0)
-	#thtvref.drop_vars('time')
-	#thtvref = thtvref.expand_dims(dim={'nj':Y,'time':Time,'ni':X},axis=(2,0,3))[:,:,:,:]
+	Um,Vm,Wm,THm,THvm = dsmean.Um,dsmean.Vm,dsmean.Wm,dsmean.THTm,dsmean.THTvm
+
 	print('	computing resolved fluctuations ...')
 	u_fluc = (U - Um)
 	v_fluc = (V - Vm)
 	w_fluc = (W - Wm)
 	tht_fluc = (THT - THm)
-	rv_fluc = (RVT - RVm)
+	#rv_fluc = (RVT - RVm)
 	thtv_fluc = (THTv - THvm)
-	p_fluc = (P - Pm)
+	#p_fluc = (P - Pm)
 	E = 0.5*( u_fluc**2 + v_fluc**2 + w_fluc**2 )
 	#  total = resolved fluxes + subgrid fluxes
 	print('	computing fluxes ...')
@@ -561,10 +527,7 @@ def Build_budget_file(path_in,path_ini,dsB,dsO,dsmean,Tstart,Tstop,name_budget,n
 	uw = (u_fluc*w_fluc) + UW_FLX
 	vw = (v_fluc*w_fluc) + VW_FLX
 	uu = (u_fluc*u_fluc) + U_VAR
-	vv = (v_fluc*v_fluc) + V_VAR
-	ww = ( w_fluc*w_fluc) + W_VAR
 	thw =(tht_fluc*w_fluc) + THW_FLX
-	thvw = (thtv_fluc*w_fluc) + THvW_FLX
 	Em = MeanTurb(E,Tstart,Tstop,window)
 	Em = xr.DataArray(data=Em,coords={'level':Z,'ni':X},name='Em')
 	TKEm = MeanTurb(TKE,Tstart,Tstop,window)
@@ -573,96 +536,96 @@ def Build_budget_file(path_in,path_ini,dsB,dsO,dsmean,Tstart,Tstop,name_budget,n
 	
 	print('	computing budgets terms ...')
 	print('		- U')
-	u_hadv = - MeanTurb( Um*Um.differentiate('ni') ,Tstart,Tstop,window)
-	u_vadv = - MeanTurb( Wm*Um.differentiate('level') ,Tstart,Tstop,window) 	
+	u_hadv = - Um*Um.differentiate('ni')
+	u_vadv = - Wm*Um.differentiate('level')
 	u_hturb = - ( MeanTurb(uu,Tstart,Tstop,window) ).differentiate('ni')
 	u_vturb = - ( MeanTurb(uw,Tstart,Tstop,window) ).differentiate('level')
 	u_pres = - MeanTurb( Cpd*THTv*Pi.differentiate('ni') ,Tstart,Tstop,window)  # here Pi or Pi' is the same as ref is only f(z)
-	u_cor = MeanTurb( f*Vm - f_star*Wm,Tstart,Tstop,window) 
+	u_cor =  f*Vm - f_star*Wm
 	
 	
 	print('		- V')
-	v_hadv = - MeanTurb( Um*Vm.differentiate('ni') ,Tstart,Tstop,window) 		
-	v_vadv = - MeanTurb( Wm*Vm.differentiate('level') ,Tstart,Tstop,window) 	
+	v_hadv = - Um*Vm.differentiate('ni')	
+	v_vadv = - Wm*Vm.differentiate('level')
 	v_hturb = - ( MeanTurb(uv,Tstart,Tstop,window) ).differentiate('ni')
 	v_vturb = - ( MeanTurb(vw,Tstart,Tstop,window) ).differentiate('level')
-	v_cor = MeanTurb( -f*(Um-U_frc) ,Tstart,Tstop,window)
+	v_cor = -f*(Um-U_frc)
 	
-	print('		- W')
-	w_hadv = - MeanTurb( Um*Wm.differentiate('ni') ,Tstart,Tstop,window) 		
-	w_vadv = - MeanTurb( Wm*Wm.differentiate('level') ,Tstart,Tstop,window)
-	w_hturb = - ( MeanTurb(uw,Tstart,Tstop,window) ).differentiate('ni')
-	w_vturb = - ( MeanTurb(ww,Tstart,Tstop,window) ).differentiate('level')
-	w_cor = + MeanTurb( f_star*Um ,Tstart,Tstop,window)	
-	w_pres = -( (P.differentiate('level') + RHOREF*g)/RHOREF ).mean(dim=['time','nj'])
-	w_boy = g*(THTv/THTv_ref - 1).mean(dim=['time','nj'])
+	# print('		- W')
+	# w_hadv = - MeanTurb( Um*Wm.differentiate('ni') ,Tstart,Tstop,window) 		
+	# w_vadv = - MeanTurb( Wm*Wm.differentiate('level') ,Tstart,Tstop,window)
+	# w_hturb = - ( MeanTurb(uw,Tstart,Tstop,window) ).differentiate('ni')
+	# w_vturb = - ( MeanTurb(ww,Tstart,Tstop,window) ).differentiate('level')
+	# w_cor = + MeanTurb( f_star*Um ,Tstart,Tstop,window)	
+	# w_pres = -( (P.differentiate('level') + RHOREF*g)/RHOREF ).mean(dim=['time','nj'])
+	# w_boy = g*(THTv/THTv_ref - 1).mean(dim=['time','nj'])
 	
-	print('		- TKE resolved')  # from MNH userguide 'LES Budgets'
-	TKE_HADV_r = - MeanTurb( Um*Em.differentiate('ni'),Tstart,Tstop,window) 	
-	TKE_VADV_r = - MeanTurb( Wm*Em.differentiate('level'),Tstart,Tstop,window)
-	TKE_PRES_r = - MeanTurb( (u_fluc*p_fluc.differentiate('ni') + 
-					v_fluc*p_fluc.differentiate('nj') +
-					w_fluc*p_fluc.differentiate('level'))/rhoref ,Tstart,Tstop,window)
-	TKE_HDP_r = - ( MeanTurb(u_fluc*u_fluc,Tstart,Tstop,window)*dsmean.Um[:,:].differentiate('ni') +
-			MeanTurb(u_fluc*v_fluc,Tstart,Tstop,window)*dsmean.Vm[:,:].differentiate('ni') +
-			MeanTurb(u_fluc*w_fluc,Tstart,Tstop,window)*dsmean.Wm[:,:].differentiate('ni') )
-	TKE_VDP_r = - ( MeanTurb(w_fluc*u_fluc,Tstart,Tstop,window)*dsmean.Um[:,:].differentiate('level') +
-			MeanTurb(w_fluc*v_fluc,Tstart,Tstop,window)*dsmean.Vm[:,:].differentiate('level') +
-			MeanTurb(w_fluc*w_fluc,Tstart,Tstop,window)*dsmean.Wm[:,:].differentiate('level') )
-	TKE_TP_r = g * MeanTurb( w_fluc*thtv_fluc/THvm ,Tstart,Tstop,window) 
-	TKE_HTR_r = - ( MeanTurb(u_fluc*E,Tstart,Tstop,window) ).differentiate('ni')
-	TKE_VTR_r = - ( MeanTurb(w_fluc*E,Tstart,Tstop,window) ).differentiate('level')
-	TKE_SBG = -( MeanTurb( u_fluc*U_VAR.differentiate('ni'),Tstart,Tstop,window) +
-			MeanTurb( u_fluc*UV_FLX.differentiate('nj'),Tstart,Tstop,window) +
-			MeanTurb( u_fluc*UW_FLX.differentiate('level'),Tstart,Tstop,window) +
-			MeanTurb( v_fluc*UV_FLX.differentiate('ni'),Tstart,Tstop,window) +
-			MeanTurb( v_fluc*V_VAR.differentiate('nj'),Tstart,Tstop,window) +
-			MeanTurb( v_fluc*VW_FLX.differentiate('level'),Tstart,Tstop,window) +
-			MeanTurb( w_fluc*UW_FLX.differentiate('ni'),Tstart,Tstop,window) +
-			MeanTurb( w_fluc*VW_FLX.differentiate('nj'),Tstart,Tstop,window) +
-			MeanTurb( w_fluc*W_VAR.differentiate('level'),Tstart,Tstop,window) )
+	# print('		- TKE resolved')  # from MNH userguide 'LES Budgets'
+	# TKE_HADV_r = - MeanTurb( Um*Em.differentiate('ni'),Tstart,Tstop,window) 	
+	# TKE_VADV_r = - MeanTurb( Wm*Em.differentiate('level'),Tstart,Tstop,window)
+	# TKE_PRES_r = - MeanTurb( (u_fluc*p_fluc.differentiate('ni') + 
+	# 				v_fluc*p_fluc.differentiate('nj') +
+	# 				w_fluc*p_fluc.differentiate('level'))/rhoref ,Tstart,Tstop,window)
+	# TKE_HDP_r = - ( MeanTurb(u_fluc*u_fluc,Tstart,Tstop,window)*dsmean.Um[:,:].differentiate('ni') +
+	# 		MeanTurb(u_fluc*v_fluc,Tstart,Tstop,window)*dsmean.Vm[:,:].differentiate('ni') +
+	# 		MeanTurb(u_fluc*w_fluc,Tstart,Tstop,window)*dsmean.Wm[:,:].differentiate('ni') )
+	# TKE_VDP_r = - ( MeanTurb(w_fluc*u_fluc,Tstart,Tstop,window)*dsmean.Um[:,:].differentiate('level') +
+	# 		MeanTurb(w_fluc*v_fluc,Tstart,Tstop,window)*dsmean.Vm[:,:].differentiate('level') +
+	# 		MeanTurb(w_fluc*w_fluc,Tstart,Tstop,window)*dsmean.Wm[:,:].differentiate('level') )
+	# TKE_TP_r = g * MeanTurb( w_fluc*thtv_fluc/THvm ,Tstart,Tstop,window) 
+	# TKE_HTR_r = - ( MeanTurb(u_fluc*E,Tstart,Tstop,window) ).differentiate('ni')
+	# TKE_VTR_r = - ( MeanTurb(w_fluc*E,Tstart,Tstop,window) ).differentiate('level')
+	# TKE_SBG = -( MeanTurb( u_fluc*U_VAR.differentiate('ni'),Tstart,Tstop,window) +
+	# 		MeanTurb( u_fluc*UV_FLX.differentiate('nj'),Tstart,Tstop,window) +
+	# 		MeanTurb( u_fluc*UW_FLX.differentiate('level'),Tstart,Tstop,window) +
+	# 		MeanTurb( v_fluc*UV_FLX.differentiate('ni'),Tstart,Tstop,window) +
+	# 		MeanTurb( v_fluc*V_VAR.differentiate('nj'),Tstart,Tstop,window) +
+	# 		MeanTurb( v_fluc*VW_FLX.differentiate('level'),Tstart,Tstop,window) +
+	# 		MeanTurb( w_fluc*UW_FLX.differentiate('ni'),Tstart,Tstop,window) +
+	# 		MeanTurb( w_fluc*VW_FLX.differentiate('nj'),Tstart,Tstop,window) +
+	# 		MeanTurb( w_fluc*W_VAR.differentiate('level'),Tstart,Tstop,window) )
 			
-	print('		- TKE subgrid') # from MNH userguide 'LES Budgets'	
-	e_HADVM_s = - MeanTurb( Um*TKEm.differentiate('ni'),Tstart,Tstop,window) 
-	e_VADVM_s = - MeanTurb( Wm*TKEm.differentiate('level'),Tstart,Tstop,window)
-	e_ADVR_s = - MeanTurb( u_fluc*TKE.differentiate('ni') +  
-				v_fluc*TKE.differentiate('nj') + 
-				w_fluc*TKE.differentiate('level') ,Tstart,Tstop,window)
-	e_DIFF_s = MeanTurb( 1/rhoref * ( ( C2M*rhoref*LM*np.sqrt(TKE)*TKE.differentiate('ni')).differentiate('ni') +
-				( C2M*rhoref*LM*np.sqrt(TKE)*TKE.differentiate('level')).differentiate('level') ),Tstart,Tstop,window) # this is pressure corr + transport (triple terms). Param of mnh
+	# print('		- TKE subgrid') # from MNH userguide 'LES Budgets'	
+	# e_HADVM_s = - MeanTurb( Um*TKEm.differentiate('ni'),Tstart,Tstop,window) 
+	# e_VADVM_s = - MeanTurb( Wm*TKEm.differentiate('level'),Tstart,Tstop,window)
+	# e_ADVR_s = - MeanTurb( u_fluc*TKE.differentiate('ni') +  
+	# 			v_fluc*TKE.differentiate('nj') + 
+	# 			w_fluc*TKE.differentiate('level') ,Tstart,Tstop,window)
+	# e_DIFF_s = MeanTurb( 1/rhoref * ( ( C2M*rhoref*LM*np.sqrt(TKE)*TKE.differentiate('ni')).differentiate('ni') +
+	# 			( C2M*rhoref*LM*np.sqrt(TKE)*TKE.differentiate('level')).differentiate('level') ),Tstart,Tstop,window) # this is pressure corr + transport (triple terms). Param of mnh
 				
-	e_HDPM_s = - ( MeanTurb(UV_FLX,Tstart,Tstop,window)*dsmean.Vm[:,:].differentiate('ni') +
-			MeanTurb(UW_FLX,Tstart,Tstop,window)*dsmean.Wm[:,:].differentiate('ni') +
-			MeanTurb(U_VAR,Tstart,Tstop,window)*dsmean.Um[:,:].differentiate('ni') )
+	# e_HDPM_s = - ( MeanTurb(UV_FLX,Tstart,Tstop,window)*dsmean.Vm[:,:].differentiate('ni') +
+	# 		MeanTurb(UW_FLX,Tstart,Tstop,window)*dsmean.Wm[:,:].differentiate('ni') +
+	# 		MeanTurb(U_VAR,Tstart,Tstop,window)*dsmean.Um[:,:].differentiate('ni') )
 			
-	e_VDPM_s = - (	MeanTurb(VW_FLX,Tstart,Tstop,window)*dsmean.Vm[:,:].differentiate('level') +
-			MeanTurb(W_VAR,Tstart,Tstop,window)*dsmean.Wm[:,:].differentiate('level') +
-			MeanTurb(UW_FLX,Tstart,Tstop,window)*dsmean.Um[:,:].differentiate('level') )
+	# e_VDPM_s = - (	MeanTurb(VW_FLX,Tstart,Tstop,window)*dsmean.Vm[:,:].differentiate('level') +
+	# 		MeanTurb(W_VAR,Tstart,Tstop,window)*dsmean.Wm[:,:].differentiate('level') +
+	# 		MeanTurb(UW_FLX,Tstart,Tstop,window)*dsmean.Um[:,:].differentiate('level') )
 					
-	e_DPR_s = - MeanTurb(   U_VAR*u_fluc.differentiate('ni') +
-				UV_FLX*v_fluc.differentiate('ni') +
-				UW_FLX*w_fluc.differentiate('ni') +
+	# e_DPR_s = - MeanTurb(   U_VAR*u_fluc.differentiate('ni') +
+	# 			UV_FLX*v_fluc.differentiate('ni') +
+	# 			UW_FLX*w_fluc.differentiate('ni') +
 				
-				UV_FLX*u_fluc.differentiate('nj') +
-				V_VAR*v_fluc.differentiate('nj') +
-				VW_FLX*w_fluc.differentiate('nj') +
+	# 			UV_FLX*u_fluc.differentiate('nj') +
+	# 			V_VAR*v_fluc.differentiate('nj') +
+	# 			VW_FLX*w_fluc.differentiate('nj') +
 				
-				UW_FLX*u_fluc.differentiate('level') +
-				VW_FLX*v_fluc.differentiate('level') +
-				W_VAR*w_fluc.differentiate('level') ,Tstart,Tstop,window)
-	e_TP_s = MeanTurb( g/thtvref3D*THvW_FLX ,Tstart,Tstop,window)
-	e_DISS_s = - MeanTurb( Ceps*TKE**(3/2)/LM ,Tstart,Tstop,window)
+	# 			UW_FLX*u_fluc.differentiate('level') +
+	# 			VW_FLX*v_fluc.differentiate('level') +
+	# 			W_VAR*w_fluc.differentiate('level') ,Tstart,Tstop,window)
+	# e_TP_s = MeanTurb( g/thtvref3D*THvW_FLX ,Tstart,Tstop,window)
+	# e_DISS_s = - MeanTurb( Ceps*TKE**(3/2)/LM ,Tstart,Tstop,window)
 	
 	print('		- theta')
-	tht_hadv = - MeanTurb( Um*THm.differentiate('ni')    ,Tstart,Tstop,window)
-	tht_vadv = - MeanTurb( Wm*THm.differentiate('level') ,Tstart,Tstop,window)
+	tht_hadv = - Um*THm.differentiate('ni')
+	tht_vadv = - Wm*THm.differentiate('level')
 	tht_vturb = - ( MeanTurb(thw,Tstart,Tstop,window) ).differentiate('level')
 	tht_hturb = - ( MeanTurb(thw,Tstart,Tstop,window) ).differentiate('ni')
 	
 	# RV
 	# TBD
-	"""
-	Comments 
+	"""Comments 
+	
 	
 	* On the validity of the assumption : total flux = resolved flux + subgrid flux --------------------------------------------------------
 	
@@ -830,6 +793,7 @@ def Build_budget_file(path_in,path_ini,dsB,dsO,dsmean,Tstart,Tstop,name_budget,n
 		
 	 		And after that we can decompose in resolved and subgrid scales as done in this script
 	"""
+	
 	print('	building dataset')
 	data_vars = {'u_hadv':(['level','ni'],u_hadv.data,{'long_name':'Horizontal advection',
 						'units':'m s-2',
@@ -864,102 +828,102 @@ def Build_budget_file(path_in,path_ini,dsB,dsO,dsmean,Tstart,Tstop,name_budget,n
 			'v_cor':(['level','ni'],v_cor.data,{'long_name':"Coriolis forces (-fU)",
 						'units':'m s-2',
 						'grid location':'mass_center'}),
-			'w_hadv':(['level','ni'],w_hadv.data,{'long_name':'Horizontal advection',
-						'units':'m s-2',
-						'grid location':'mass_center'}),
-			'w_vadv':(['level','ni'],w_vadv.data,{'long_name':'Vertical advection',
-						'units':'m s-2',
-						'grid location':'mass_center'}),
-			'w_hturb':(['level','ni'],w_hturb.data,{'long_name':'Horizontal turbulent stress',
-						'units':'m s-2',
-						'grid location':'mass_center'}),
-			'w_vturb':(['level','ni'],w_vturb.data,{'long_name':"Vertical turbulent stress",
-						'units':'m s-2',
-						'grid location':'mass_center'}),
-			'w_pres':(['level','ni'],w_pres.data,{'long_name':"Pressure gradient",
-						'units':'m s-2',
-						'grid location':'mass_center'}),
-			'w_grav':(['level','ni'],w_boy.data,{'long_name':"Gravity",
-						'units':'m s-2',
-						'grid location':'mass_center'}),
-			'w_cor':(['level','ni'],w_cor.data,{'long_name':"Coriolis (f_star*U)",
-						'units':'m s-2',
-						'grid location':'mass_center'}),
-			'E_HADV_r':(['level','ni'],TKE_HADV_r.data,{'long_name':"Horizontal advection of resolved TKE by mean flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'E_VADV_r':(['level','ni'],TKE_VADV_r.data,{'long_name':"Vertical advection of resolved TKE by mean flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'E_PRES_r':(['level','ni'],TKE_PRES_r.data,{'long_name':"Pressure term (resolved)",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'E_HDP_r':(['level','ni'],TKE_HDP_r.data,{'long_name':"Horizontal dynamical production of resolved TKE by shear of mean flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'E_VDP_r':(['level','ni'],TKE_VDP_r.data,{'long_name':"Vertical dynamical production of resolved TKE by shear of mean flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'E_HTR_r':(['level','ni'],TKE_HTR_r.data,{'long_name':"Horizontal transport of resolved TKE by resolved fluctuations",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'E_VTR_r':(['level','ni'],TKE_VTR_r.data,{'long_name':"Vertical transport of resolved TKE by resolved fluctuations",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'E_TP_r':(['level','ni'],TKE_TP_r.data,{'long_name':"Thermal production/sink of resolved TKE",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'E_SBG':(['level','ni'],TKE_SBG.data,{'long_name':"Transport from resolved to subgrid scale",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'e_HADVM_s':(['level','ni'],e_HADVM_s.data,{'long_name':"Horizontal advection of subgrid TKE by resolved mean flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'e_VADVM_s':(['level','ni'],e_VADVM_s.data,{'long_name':"Vertical advection of subgrid TKE by resolved mean flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'e_ADVR_s':(['level','ni'],e_ADVR_s.data,{'long_name':"Advection of subgrid TKE by resolved fluctuations",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'e_DIFF_s':(['level','ni'],e_DIFF_s.data,{'long_name':"Transport term (pressure and subgrid fluctuations) of subgrid TKE",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'e_TP_s':(['level','ni'],e_TP_s.data,{'long_name':"Thermal production/sink of subgrid TKE",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'e_DISS_s':(['level','ni'],e_DISS_s.data,{'long_name':"Subgrid dissipation",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'e_HDPM_s':(['level','ni'],e_HDPM_s.data,{'long_name':"Horizontal dynamical production by mean resolved flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'e_VDPM_s':(['level','ni'],e_VDPM_s.data,{'long_name':"Vertical dynamical production by mean resolved flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'e_DPR_s':(['level','ni'],e_DPR_s.data,{'long_name':"Dynamical production by resolved fluctuations",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'ET_HADV':(['level','ni'],TKE_HADV_r.data + e_HADVM_s.data,{'long_name':"Horizontal advection of total TKE by mean flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'ET_VADV':(['level','ni'],TKE_VADV_r.data + e_VADVM_s.data,{'long_name':"Vertical advection of total TKE by mean flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'ET_HDP':(['level','ni'], TKE_HDP_r.data + e_HDPM_s.data,{'long_name':"Horizontal dynamical production of total TKE by shear of mean flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'ET_VDP':(['level','ni'], TKE_VDP_r.data + e_VDPM_s.data,{'long_name':"Vertical dynamical production of total TKE by shear of mean flow",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'ET_DIFF':(['level','ni'],TKE_HTR_r.data+TKE_VTR_r.data+TKE_PRES_r.data+e_DIFF_s.data,{'long_name':"Diffusion of total TKE (pressure + transport by fluctuations)",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'ET_TP':(['level','ni'],TKE_TP_r.data + e_TP_s.data,{'long_name':"Thermal production/sink of total TKE",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
-			'ET_DISS':(['level','ni'],e_DISS_s.data,{'long_name':"Dissipation of total TKE",
-						'units':'m2 s-3',
-						'grid location':'mass_center'}),
+			# 'w_hadv':(['level','ni'],w_hadv.data,{'long_name':'Horizontal advection',
+			# 			'units':'m s-2',
+			# 			'grid location':'mass_center'}),
+			# 'w_vadv':(['level','ni'],w_vadv.data,{'long_name':'Vertical advection',
+			# 			'units':'m s-2',
+			# 			'grid location':'mass_center'}),
+			# 'w_hturb':(['level','ni'],w_hturb.data,{'long_name':'Horizontal turbulent stress',
+			# 			'units':'m s-2',
+			# 			'grid location':'mass_center'}),
+			# 'w_vturb':(['level','ni'],w_vturb.data,{'long_name':"Vertical turbulent stress",
+			# 			'units':'m s-2',
+			# 			'grid location':'mass_center'}),
+			# 'w_pres':(['level','ni'],w_pres.data,{'long_name':"Pressure gradient",
+			# 			'units':'m s-2',
+			# 			'grid location':'mass_center'}),
+			# 'w_grav':(['level','ni'],w_boy.data,{'long_name':"Gravity",
+			# 			'units':'m s-2',
+			# 			'grid location':'mass_center'}),
+			# 'w_cor':(['level','ni'],w_cor.data,{'long_name':"Coriolis (f_star*U)",
+						# 'units':'m s-2',
+						# 'grid location':'mass_center'}),
+			# 'E_HADV_r':(['level','ni'],TKE_HADV_r.data,{'long_name':"Horizontal advection of resolved TKE by mean flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'E_VADV_r':(['level','ni'],TKE_VADV_r.data,{'long_name':"Vertical advection of resolved TKE by mean flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'E_PRES_r':(['level','ni'],TKE_PRES_r.data,{'long_name':"Pressure term (resolved)",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'E_HDP_r':(['level','ni'],TKE_HDP_r.data,{'long_name':"Horizontal dynamical production of resolved TKE by shear of mean flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'E_VDP_r':(['level','ni'],TKE_VDP_r.data,{'long_name':"Vertical dynamical production of resolved TKE by shear of mean flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'E_HTR_r':(['level','ni'],TKE_HTR_r.data,{'long_name':"Horizontal transport of resolved TKE by resolved fluctuations",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'E_VTR_r':(['level','ni'],TKE_VTR_r.data,{'long_name':"Vertical transport of resolved TKE by resolved fluctuations",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'E_TP_r':(['level','ni'],TKE_TP_r.data,{'long_name':"Thermal production/sink of resolved TKE",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'E_SBG':(['level','ni'],TKE_SBG.data,{'long_name':"Transport from resolved to subgrid scale",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'e_HADVM_s':(['level','ni'],e_HADVM_s.data,{'long_name':"Horizontal advection of subgrid TKE by resolved mean flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'e_VADVM_s':(['level','ni'],e_VADVM_s.data,{'long_name':"Vertical advection of subgrid TKE by resolved mean flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'e_ADVR_s':(['level','ni'],e_ADVR_s.data,{'long_name':"Advection of subgrid TKE by resolved fluctuations",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'e_DIFF_s':(['level','ni'],e_DIFF_s.data,{'long_name':"Transport term (pressure and subgrid fluctuations) of subgrid TKE",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'e_TP_s':(['level','ni'],e_TP_s.data,{'long_name':"Thermal production/sink of subgrid TKE",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'e_DISS_s':(['level','ni'],e_DISS_s.data,{'long_name':"Subgrid dissipation",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'e_HDPM_s':(['level','ni'],e_HDPM_s.data,{'long_name':"Horizontal dynamical production by mean resolved flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'e_VDPM_s':(['level','ni'],e_VDPM_s.data,{'long_name':"Vertical dynamical production by mean resolved flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'e_DPR_s':(['level','ni'],e_DPR_s.data,{'long_name':"Dynamical production by resolved fluctuations",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'ET_HADV':(['level','ni'],TKE_HADV_r.data + e_HADVM_s.data,{'long_name':"Horizontal advection of total TKE by mean flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'ET_VADV':(['level','ni'],TKE_VADV_r.data + e_VADVM_s.data,{'long_name':"Vertical advection of total TKE by mean flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'ET_HDP':(['level','ni'], TKE_HDP_r.data + e_HDPM_s.data,{'long_name':"Horizontal dynamical production of total TKE by shear of mean flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'ET_VDP':(['level','ni'], TKE_VDP_r.data + e_VDPM_s.data,{'long_name':"Vertical dynamical production of total TKE by shear of mean flow",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'ET_DIFF':(['level','ni'],TKE_HTR_r.data+TKE_VTR_r.data+TKE_PRES_r.data+e_DIFF_s.data,{'long_name':"Diffusion of total TKE (pressure + transport by fluctuations)",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'ET_TP':(['level','ni'],TKE_TP_r.data + e_TP_s.data,{'long_name':"Thermal production/sink of total TKE",
+			# 			'units':'m2 s-3',
+			# 			'grid location':'mass_center'}),
+			# 'ET_DISS':(['level','ni'],e_DISS_s.data,{'long_name':"Dissipation of total TKE",
+						# 'units':'m2 s-3',
+						# 'grid location':'mass_center'}),
 			'THT_HADV':(['level','ni'],tht_hadv.data,{'long_name':"Horizontal advection of THT by mean flow",
 						'units':'K s-1',
 						'grid location':'mass_center'}),
@@ -979,6 +943,8 @@ def Build_budget_file(path_in,path_ini,dsB,dsO,dsmean,Tstart,Tstop,name_budget,n
 	print('	saving ...')
 	ds_fluc.load().to_netcdf(path=name_budget,mode='w')  # here all // computations are triggered so this is the longest operation
 	print('	done !')
+	endtime = time.time()
+	print('total time for budget building (s):',endtime-starttime)
 	
 def Build_flxbudget_file(path_in,dsB,dsO,dsmean,dsflx,Tstart,Tstop,name_budget,nhalo,window):
 	"""This procedure is building a file with the terms of each budgets for differents fluxes.
@@ -1163,7 +1129,6 @@ def Build_flxbudget_file(path_in,dsB,dsO,dsmean,dsflx,Tstart,Tstop,name_budget,n
 	print('	saving ...')
 	ds_flxbudget.to_netcdf(path=name_budget,mode='w')  # this is where most computations are done, in //
 	print('	done !')
-
 	
 def Build_Quadrants_terms(path_in,dsO,dsmean,name_quadrant,nhalo):
 	"""	This procedure decomposes some turbulent fluxes following a quadrant analysis:
@@ -1262,20 +1227,20 @@ def Build_Quadrants_terms(path_in,dsO,dsmean,name_quadrant,nhalo):
 	uw_3 = u_neg*w_neg
 	uw_4 = u_pos*w_neg
 	
-	wtht_1 = w_pos*tht_pos
-	wtht_2 = w_pos*tht_neg
-	wtht_3 = w_neg*tht_neg
-	wtht_4 = w_neg*tht_pos
+	# wtht_1 = w_pos*tht_pos
+	# wtht_2 = w_pos*tht_neg
+	# wtht_3 = w_neg*tht_neg
+	# wtht_4 = w_neg*tht_pos
 	
-	wthtv_1 = w_pos*thtv_pos
-	wthtv_2 = w_pos*thtv_neg
-	wthtv_3 = w_neg*thtv_neg
-	wthtv_4 = w_neg*thtv_pos
+	# wthtv_1 = w_pos*thtv_pos
+	# wthtv_2 = w_pos*thtv_neg
+	# wthtv_3 = w_neg*thtv_neg
+	# wthtv_4 = w_neg*thtv_pos
 	
-	wrv_1 = w_pos*rv_pos
-	wrv_2 = w_pos*rv_neg
-	wrv_3 = w_neg*rv_neg
-	wrv_4 = w_neg*rv_pos
+	# wrv_1 = w_pos*rv_pos
+	# wrv_2 = w_pos*rv_neg
+	# wrv_3 = w_neg*rv_neg
+	# wrv_4 = w_neg*rv_pos
 	
 	data_vars = {'uw_1':(['time','level','nj','ni'],uw_1.data,{'long_name':'outward interaction of uw',
 						'units':'m2 s-2',
@@ -1289,44 +1254,44 @@ def Build_Quadrants_terms(path_in,dsO,dsmean,name_quadrant,nhalo):
 			'uw_4':(['time','level','nj','ni'],uw_4.data,{'long_name':"sweeps of uw",
 						'units':'m2 s-2',
 						'grid location':'mass_center'}),
-			'wtht_1':(['time','level','nj','ni'],wtht_1.data,{'long_name':'ejection of wtht',
-						'units':'K m s-1',
-						'grid location':'mass_center'}),
-			'wtht_2':(['time','level','nj','ni'],wtht_2.data,{'long_name':'outward interaction of wtht',
-						'units':'K m s-1',
-						'grid location':'mass_center'}),
-			'wtht_3':(['time','level','nj','ni'],wtht_3.data,{'long_name':'sweeps of wtht',
-						'units':'K m s-1',
-						'grid location':'mass_center'}),
-			'wtht_4':(['time','level','nj','ni'],wtht_4.data,{'long_name':"inward interaction of wtht",
-						'units':'K m s-1',
-						'grid location':'mass_center'}),
-			'wthtv_1':(['time','level','nj','ni'],wthtv_1.data,{'long_name':'ejection of wthtv',
-						'units':'K m s-1',
-						'grid location':'mass_center'}),
-			'wthtv_2':(['time','level','nj','ni'],wthtv_2.data,{'long_name':'outward interaction of wthtv',
-						'units':'K m s-1',
-						'grid location':'mass_center'}),
-			'wthtv_3':(['time','level','nj','ni'],wthtv_3.data,{'long_name':'sweeps of wthtv',
-						'units':'K m s-1',
-						'grid location':'mass_center'}),
-			'wthtv_4':(['time','level','nj','ni'],wthtv_4.data,{'long_name':"inward interaction of wthtv",
-						'units':'K m s-1',
-						'grid location':'mass_center'}),
-			'wrv_1':(['time','level','nj','ni'],wrv_1.data,{'long_name':'ejection of wrv',
-						'units':'kg/kg m s-1',
-						'grid location':'mass_center'}),
-			'wrv_2':(['time','level','nj','ni'],wrv_2.data,{'long_name':'outward interaction of wrv',
-						'units':'kg/kg m s-1',
-						'grid location':'mass_center'}),
-			'wrv_3':(['time','level','nj','ni'],wrv_3.data,{'long_name':'sweeps of wrv',
-						'units':'kg/kg m s-1',
-						'grid location':'mass_center'}),
-			'wrv_4':(['time','level','nj','ni'],wrv_4.data,{'long_name':"inward interaction of wrv",
-						'units':'kg/kg m s-1',
-						'grid location':'mass_center'})
+			# 'wtht_1':(['time','level','nj','ni'],wtht_1.data,{'long_name':'ejection of wtht',
+			# 			'units':'K m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wtht_2':(['time','level','nj','ni'],wtht_2.data,{'long_name':'outward interaction of wtht',
+			# 			'units':'K m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wtht_3':(['time','level','nj','ni'],wtht_3.data,{'long_name':'sweeps of wtht',
+			# 			'units':'K m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wtht_4':(['time','level','nj','ni'],wtht_4.data,{'long_name':"inward interaction of wtht",
+			# 			'units':'K m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wthtv_1':(['time','level','nj','ni'],wthtv_1.data,{'long_name':'ejection of wthtv',
+			# 			'units':'K m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wthtv_2':(['time','level','nj','ni'],wthtv_2.data,{'long_name':'outward interaction of wthtv',
+			# 			'units':'K m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wthtv_3':(['time','level','nj','ni'],wthtv_3.data,{'long_name':'sweeps of wthtv',
+			# 			'units':'K m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wthtv_4':(['time','level','nj','ni'],wthtv_4.data,{'long_name':"inward interaction of wthtv",
+			# 			'units':'K m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wrv_1':(['time','level','nj','ni'],wrv_1.data,{'long_name':'ejection of wrv',
+			# 			'units':'kg/kg m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wrv_2':(['time','level','nj','ni'],wrv_2.data,{'long_name':'outward interaction of wrv',
+			# 			'units':'kg/kg m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wrv_3':(['time','level','nj','ni'],wrv_3.data,{'long_name':'sweeps of wrv',
+			# 			'units':'kg/kg m s-1',
+			# 			'grid location':'mass_center'}),
+			# 'wrv_4':(['time','level','nj','ni'],wrv_4.data,{'long_name':"inward interaction of wrv",
+			# 			'units':'kg/kg m s-1',
+			# 			'grid location':'mass_center'})
 			 }	 
-	
+	# Note : no need for scalar flux but you can add them by un-commenting the few lines above
 			 
 	coords={'time':Time,'level': Z,'nj':Y,'ni':X}
 	ds_flxbudget = xr.Dataset(data_vars=data_vars,coords=coords,
@@ -1384,11 +1349,11 @@ def build_CS1(nhalo,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,SEUIL
 	for case in data.keys():
 		if case in ['cold','warm','warm_wide'] or case[-3:]=='min':
 			dim=['ni','nj']
-		elif case=='S1' or case=='S1decayHalf':
+		elif case[:2]=='S1':
 			dim=['time','nj']
 		else:
 			dim=['time']
-			
+		
 		for TURB_COND in L_TURB_COND:
 			ds = data[case] # already opened
 			# getting time info
@@ -1414,6 +1379,7 @@ def build_CS1(nhalo,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,SEUIL
 			BOOL_HERE = pathlib.Path(path_write).is_file()
 			BOOL_SAME = False
 			print('		checking if '+case+' is here')
+			print('			mean is ',dim)
 			if BOOL_HERE:
 				dstemp = xr.open_dataset(path_write)
 				NmCS,NgammaRv = dstemp.attrs['mCS'],dstemp.attrs['gammaRv']
@@ -1439,14 +1405,14 @@ def build_CS1(nhalo,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,SEUIL
 				# info about the parameters used
 				print('		input: number of time stamps =',len(DimTime))
 				print('		input: min turb detection =',TURB_COND)
-				print("		input: how rv' is computed:",RV_DIFF)
+				print("		input: how sv' is computed:",RV_DIFF)
 				print('		input: mCS =',mCS)
-				print('		input: gammaRV =',gammaRV*100,'%')
-				print('		input: minimum turb intensity 1 =',gammaTurb1*100,'%')
-				print('		input: minimum turb intensity 2 =',gammaTurb2*100,'%')
-				print('		input: minimum turb intensity 3 =',gammaITURB3*100,'%')
-				print('		input: coeff turb intensity 3 =',mITURB3)
-				print('		input: minimum Ec=',gammaEc*100,'%')
+				print('		input: gammaSV =',gammaRV*100,'%')
+				# print('		input: minimum turb intensity 1 =',gammaTurb1*100,'%')
+				# print('		input: minimum turb intensity 2 =',gammaTurb2*100,'%')
+				# print('		input: minimum turb intensity 3 =',gammaITURB3*100,'%')
+				# print('		input: coeff turb intensity 3 =',mITURB3)
+				# print('		input: minimum Ec=',gammaEc*100,'%')
 				print('		output file:',path_write)
 				print('loading inst. fields')
 				# Instantaneous fields
@@ -1625,7 +1591,7 @@ def build_CS1(nhalo,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,SEUIL
 					BOOL_turb3 = Compute_bool_turb(dim,TURB_COND,param_COND,X,Y,Z,ABLH,
 							SV3,SV3m,U,V,W,Um,Vm,Wm,E,Em)
 					BOOL_turb = np.logical_or(BOOL_turb1,BOOL_turb3)
-					if case=='S1' or case=='S1decayHalf':
+					if case[:2]=='S1':
 						BOOL_turb4 = Compute_bool_turb(dim,TURB_COND,param_COND,X,Y,Z,ABLH,
 							SV4,SV4m,U,V,W,Um,Vm,Wm,E,Em)
 						BOOL_turb = np.logical_or(BOOL_turb,BOOL_turb4)
@@ -1647,7 +1613,7 @@ def build_CS1(nhalo,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,SEUIL
 				#	if SVT_type=='RV' : there is no overlap thanks to mutually exclusive CS
 				# 	if SV4 and SV1 are both present, overlap can happen. So most concentrated one
 				#		if used in this case.
-				if (case=='S1' or case=='S1decayHalf') and SVT_type=='SVT':				
+				if case[:2]=='S1' and SVT_type=='SVT':				
 					global_mask = xr.where( np.logical_and(BOOL_up,SV1>SV4) ,1,0)			# up=1
 					global_mask = xr.where( np.logical_and(BOOL_sub,SV1>SV4),2,global_mask) # sub=2
 					global_mask = xr.where( np.logical_and(BOOL_up2,SV1<SV4) ,5,global_mask)# up2=5
@@ -1661,113 +1627,131 @@ def build_CS1(nhalo,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,SEUIL
 					global_mask = xr.where(BOOL_down,3,global_mask) # down=3
 					global_mask = xr.where(BOOL_env,4,global_mask)  # env=4
 				print('		shape of U',U.shape)
-				data_vars = {'UT':(dicoDim,U.data,{'long_name':'UT',
-									'units':'m s-1',
-									'grid location':'mass_center'}),
-						'VT':(dicoDim,V.data,{'long_name':'VT',
-									'units':'m s-1',
-									'grid location':'mass_center'}),
-						'WT':(dicoDim,W.data,{'long_name':'WT',
-									'units':'m s-1',
-									'grid location':'mass_center'}),
-						'THT':(dicoDim,THT.data,{'long_name':'THT',
-									'units':'K',
-									'grid location':'mass_center'}),
-						'THTV':(dicoDim,THTV.data,{'long_name':'THTV',
-									'units':'K',
-									'grid location':'mass_center'}),
-						'RVT':(dicoDim,RV.data,{'long_name':'RVT',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'UTm':(dicoDim,Um.data,{'long_name':'Horizontal mean U in 3D',
-									'units':'m s-1',
-									'grid location':'mass_center'}),
-						'VTm':(dicoDim,Vm.data,{'long_name':'Horizontal mean V in 3D',
-									'units':'m s-1',
-									'grid location':'mass_center'}),
-						'WTm':(dicoDim,Wm.data,{'long_name':'Horizontal mean W in 3D',
-									'units':'m s-1',
-									'grid location':'mass_center'}),
-						'THTm':(dicoDim,THTm.data,{'long_name':'Horizontal mean THT in 3D',
-									'units':'K',
-									'grid location':'mass_center'}),
-						'THTVm':(dicoDim,THTVm.data,{'long_name':'Horizontal mean THTV in 3D',
-									'units':'K',
-									'grid location':'mass_center'}),
-						'RVTm':(dicoDim,RVm.data,{'long_name':'Horizontal mean RVT in 3D',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'E':(dicoDim,E.data,{'long_name':'Total turbulent kinetic energ',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'Em':(dicoDim,Em.data,{'long_name':'Total horizontal mean turbulent kinetic energy in 3D',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'SV1':(dicoDim,SV1.data,{'long_name':'Passive scalar 1 (surface)',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'SV1m':(dicoDim,SV1m.data,{'long_name':'Mean Passive scalar 1 in 3D',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'SV4':(dicoDim,SV4.data,{'long_name':'Passive scalar 2 (surface)',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'SV4m':(dicoDim,SV4m.data,{'long_name':'Mean Passive scalar 2 in 3D',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'SV3':(dicoDim,SV3.data,{'long_name':'Passive scalar 3 (top ABL)',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'SV3m':(dicoDim,SV3m.data,{'long_name':'Mean Passive scalar 3 in 3D',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'is_turb':(dicoDim,xr.where(BOOL_turb,1,0).data,{'long_name':'mask for turbulent motion only',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'is_turb1':(dicoDim,xr.where(BOOL_turb1,1,0).data,{'long_name':'mask for turbulent motion only (SVT1)',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'is_turb3':(dicoDim,xr.where(BOOL_turb3,1,0).data,{'long_name':'mask for turbulent motion only (SVT3)',
-									'units':'kg/kg',
-									'grid location':'mass_center'}),
-						'is_up':(dicoDim,xr.where(BOOL_up,1,0).data,{'long_name':'mask for updrafts',
+
+				# data_vars = {'UT':(dicoDim,U.data,{'long_name':'UT',
+				# 					'units':'m s-1',
+				# 					'grid location':'mass_center'}),
+				# 		'VT':(dicoDim,V.data,{'long_name':'VT',
+				# 					'units':'m s-1',
+				# 					'grid location':'mass_center'}),
+				# 		'WT':(dicoDim,W.data,{'long_name':'WT',
+				# 					'units':'m s-1',
+				# 					'grid location':'mass_center'}),
+				# 		'THT':(dicoDim,THT.data,{'long_name':'THT',
+				# 					'units':'K',
+				# 					'grid location':'mass_center'}),
+				# 		'THTV':(dicoDim,THTV.data,{'long_name':'THTV',
+				# 					'units':'K',
+				# 					'grid location':'mass_center'}),
+				# 		'RVT':(dicoDim,RV.data,{'long_name':'RVT',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'UTm':(dicoDim,Um.data,{'long_name':'Horizontal mean U in 3D',
+				# 					'units':'m s-1',
+				# 					'grid location':'mass_center'}),
+				# 		'VTm':(dicoDim,Vm.data,{'long_name':'Horizontal mean V in 3D',
+				# 					'units':'m s-1',
+				# 					'grid location':'mass_center'}),
+				# 		'WTm':(dicoDim,Wm.data,{'long_name':'Horizontal mean W in 3D',
+				# 					'units':'m s-1',
+				# 					'grid location':'mass_center'}),
+				# 		'THTm':(dicoDim,THTm.data,{'long_name':'Horizontal mean THT in 3D',
+				# 					'units':'K',
+				# 					'grid location':'mass_center'}),
+				# 		'THTVm':(dicoDim,THTVm.data,{'long_name':'Horizontal mean THTV in 3D',
+				# 					'units':'K',
+				# 					'grid location':'mass_center'}),
+				# 		'RVTm':(dicoDim,RVm.data,{'long_name':'Horizontal mean RVT in 3D',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'E':(dicoDim,E.data,{'long_name':'Total turbulent kinetic energ',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'Em':(dicoDim,Em.data,{'long_name':'Total horizontal mean turbulent kinetic energy in 3D',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'SV1':(dicoDim,SV1.data,{'long_name':'Passive scalar 1 (surface)',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'SV1m':(dicoDim,SV1m.data,{'long_name':'Mean Passive scalar 1 in 3D',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'SV4':(dicoDim,SV4.data,{'long_name':'Passive scalar 2 (surface)',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'SV4m':(dicoDim,SV4m.data,{'long_name':'Mean Passive scalar 2 in 3D',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'SV3':(dicoDim,SV3.data,{'long_name':'Passive scalar 3 (top ABL)',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'SV3m':(dicoDim,SV3m.data,{'long_name':'Mean Passive scalar 3 in 3D',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'is_turb':(dicoDim,xr.where(BOOL_turb,1,0).data,{'long_name':'mask for turbulent motion only',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'is_turb1':(dicoDim,xr.where(BOOL_turb1,1,0).data,{'long_name':'mask for turbulent motion only (SVT1)',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'is_turb3':(dicoDim,xr.where(BOOL_turb3,1,0).data,{'long_name':'mask for turbulent motion only (SVT3)',
+				# 					'units':'kg/kg',
+				# 					'grid location':'mass_center'}),
+				# 		'is_up':(dicoDim,xr.where(BOOL_up,1,0).data,{'long_name':'mask for updrafts',
+				# 					'units':'',
+				# 					'grid location':'mass_center'}),
+				# 		'is_sub':(dicoDim,xr.where(BOOL_sub,1,0).data,{'long_name':'mask for subsiding shells',
+				# 					'units':'',
+				# 					'grid location':'mass_center'}),
+				# 		'is_down':(dicoDim,xr.where(BOOL_down,1,0).data,{'long_name':'mask for downdrafts',
+				# 					'units':'',
+				# 					'grid location':'mass_center'}),
+				# 		'is_env':(dicoDim,xr.where(BOOL_env,1,0).data,{'long_name':'mask for environment',
+				# 					'units':'',
+				# 					'grid location':'mass_center'}),
+				# 		'global_objects':(dicoDim,global_mask.data,{'long_name':'All identified structures',
+				# 					'units':'',
+				# 					'grid location':'mass_center'}),
+				# 		'E0':(dicoSurfDim,E0,{'long_name':'Surface latent heat flux',
+				# 					'units':'kg/kg m.s-1',
+				# 					'grid location':'mass_center'}),
+				# 		'Q0':(dicoSurfDim,Q0,{'long_name':'Surface sensible heat flux',
+				# 					'units':'K.m.s-1',
+				# 					'grid location':'mass_center'}),
+				# 		'Qv0':(dicoSurfDim,Qv0,{'long_name':'Surface buoyancy flux',
+				# 					'units':'K.m.s-1',
+				# 					'grid location':'mass_center'}),
+				# 		'u_star':(dicoSurfDim,u_star,{'long_name':'Surface friction velocity',
+				# 					'units':'m.s-1',
+				# 					'grid location':'mass_center'}),
+				# 		 }	
+				# if (case=='S1' or case=='S1decayHalf') and SVT_type=='SVT':
+				# 	data_vars['is_turb4'] = (dicoDim,xr.where(BOOL_turb4,1,0).data,{'long_name':'mask for turbulent motion only (SVT4)',
+				# 					'units':'',
+				# 					'grid location':'mass_center'})
+				# 	data_vars['is_up2'] = (dicoDim,xr.where(BOOL_up2,1,0).data,{'long_name':'mask for updrafts sv4',
+				# 				'units':'',
+				# 				'grid location':'mass_center'})
+				# 	data_vars['is_sub2'] = (dicoDim,xr.where(BOOL_sub2,1,0).data,{'long_name':'mask for subsiding shells sv4',
+				# 				'units':'',
+				# 				'grid location':'mass_center'})
+
+				data_vars = {'global_objects':(dicoDim,global_mask.data,{'long_name':'All identified structures',
 									'units':'',
 									'grid location':'mass_center'}),
-						'is_sub':(dicoDim,xr.where(BOOL_sub,1,0).data,{'long_name':'mask for subsiding shells',
-									'units':'',
+							'UT':(dicoDim,U.data,{'long_name':'UT',
+									'units':'m s-1',
+				 					'grid location':'mass_center'}),
+							'WT':(dicoDim,W.data,{'long_name':'WT',
+				 					'units':'m s-1',
+				 					'grid location':'mass_center'}),
+							'THT':(dicoDim,THT.data,{'long_name':'THT',
+				 					'units':'K',
 									'grid location':'mass_center'}),
-						'is_down':(dicoDim,xr.where(BOOL_down,1,0).data,{'long_name':'mask for downdrafts',
-									'units':'',
-									'grid location':'mass_center'}),
-						'is_env':(dicoDim,xr.where(BOOL_env,1,0).data,{'long_name':'mask for environment',
-									'units':'',
-									'grid location':'mass_center'}),
-						'global_objects':(dicoDim,global_mask.data,{'long_name':'All identified structures',
-									'units':'',
-									'grid location':'mass_center'}),
-						'E0':(dicoSurfDim,E0,{'long_name':'Surface latent heat flux',
-									'units':'kg/kg m.s-1',
-									'grid location':'mass_center'}),
-						'Q0':(dicoSurfDim,Q0,{'long_name':'Surface sensible heat flux',
-									'units':'K.m.s-1',
-									'grid location':'mass_center'}),
-						'Qv0':(dicoSurfDim,Qv0,{'long_name':'Surface buoyancy flux',
-									'units':'K.m.s-1',
-									'grid location':'mass_center'}),
-						'u_star':(dicoSurfDim,u_star,{'long_name':'Surface friction velocity',
-									'units':'m.s-1',
-									'grid location':'mass_center'}),
+							'RVT':(dicoDim,RV.data,{'long_name':'RVT',
+									'units':'kg/kg',
+				 					'grid location':'mass_center'}),
 						 }	
-				if (case=='S1' or case=='S1decayHalf') and SVT_type=='SVT':
-					 data_vars['is_turb4'] = (dicoDim,xr.where(BOOL_turb4,1,0).data,{'long_name':'mask for turbulent motion only (SVT4)',
-									'units':'',
-									'grid location':'mass_center'})
-					 data_vars['is_up2'] = (dicoDim,xr.where(BOOL_up2,1,0).data,{'long_name':'mask for updrafts sv4',
-									'units':'',
-									'grid location':'mass_center'})
-					 data_vars['is_sub2'] = (dicoDim,xr.where(BOOL_sub2,1,0).data,{'long_name':'mask for subsiding shells sv4',
-									'units':'',
-									'grid location':'mass_center'})
 				if TURB_COND=='C10':
 					NmCS,NgammaRv,NgammaTurb1,NgammaTurb2,NgammaEc,NmITURB3,NgammaITURB3 = mCS,gammaRV,-99,-99,-99,-99,-99
 				elif TURB_COND=='ITURB':
@@ -1789,42 +1773,4 @@ def build_CS1(nhalo,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,SEUIL
 				ds_CS1.close()
 				print('	done !')
 	
-def build_paraview(X,Y,Z,path_in,name_out):
-	"""
-	"""
-	
-	# EXAMPLE
-				# Dimensions 
-	#			nx, ny, nz = 15, 15, 15 
-	#			lx, ly, lz = 1.0, 1.0, 1.0 
-	#			dx, dy, dz = lx/nx, ly/ny, lz/nz 
-	#			ncells = nx * ny * nz 
-	#			npoints = (nx + 1) * (ny + 1) * (nz + 1) 
-	#			# Coordinates 
-	#			x = np.arange(0, lx + 0.1*dx, dx, dtype='float64') 
-	#			y = np.arange(0, ly + 0.1*dy, dy, dtype='float64') 
-	#			z = np.arange(0, lz + 0.1*dz, dz, dtype='float64') 
-	#			# Variables 
-	#			pressure = np.random.rand(ncells).reshape( (nx, ny, nz)) 
-	#			temp = np.random.rand(npoints).reshape( (nx + 1, ny + 1, nz + 1)) 
-				
-	# my try, to be continued
-	
-	dsCS1 = xr.open_dataset(path_in)
-	SV1,SV1m = dsCS1.SV1,dsCS1.SV1m
-	U,V,W = dsCS1.UT,dsCS1.VT,dsCS1.WT
-	Um,Vm,Wm = dsCS1.UTm,dsCS1.VTm,dsCS1.WTm
-	global_obj = dsCS1.global_objects
-	ni = np.linspace(0,len(X)+1,len(X)+1)
-	nj = np.linspace(0,len(Y)+1,len(Y)+1)
-	nk = np.linspace(0,len(Z)+1,len(Z)+1)
-	#gridToVTK("./rectilinear", X.values/1000, Y.values/1000, Z.values, cellData = {"SV1" : SV1.transpose().values}) 
-	gridToVTK(name_out, ni, nj, nk, cellData = {"SV1" : SV1.transpose().values,
-														"SV1m" : SV1m.transpose().values,
-														"U" : U.transpose().values,
-														"V" : V.transpose().values,
-														"W" : W.transpose().values,
-														"Um" : Um.transpose().values,
-														"Vm" : Vm.transpose().values,
-														"global_obj": global_obj.transpose().values})	
 

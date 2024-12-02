@@ -5,21 +5,1256 @@ import numpy as np
 import os
 import pathlib
 import matplotlib.pyplot as plt
-import seaborn as sns
-import scipy as sp
-from scipy import signal
 import matplotlib as mpl
 from matplotlib import colors as c
 from matplotlib.gridspec import GridSpec
-from matplotlib.ticker import Locator,MultipleLocator
+from matplotlib.ticker import MultipleLocator
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from scipy.ndimage import uniform_filter1d,gaussian_filter
+import time	
 # my modules
 from module_cst import *
 from module_tools import *
 from module_CS_func import *
 from module_building_files import *
+
+
+
+# IN paper --------------------------
+def plot_uw_efficiencies_atX(X,Z,Tstart,Tstop,window,crit_value,dsflx,L_dsquadrant,dsref,L_atX,dataSST,zimax,path_save,dpi):
+	"""
+	This procedure plots the momentum efficiency as defined in Salesky et al. "On the Nature of the Transition Between Roll and Cellular Organization in the Convective Boundary Layer".
+	The plots shows the profiles of efficiency at some X for S1 and the reference profiles.
+	
+	INPUTS:
+		- X 		: X direction dataArray
+		- Z 		: Z direction dataArray
+		- Tsart 	: for MeanTurb, index for 1rst instant
+		- Tstop, 	: for MeanTurb, index for last instant
+		- window 	: for MeanTurb, index window for 1D filter
+		- crit_value	: threshold of SST to change colormap in 'DISCRETIZED_2CMAP_2'
+		- dsflx 	: dataset with the total and resolved fluxes for S1
+		- L_dsquadrant 	: dictionnary with quadrant dataset for S1 and ref sim
+		- dsref 	: dataset with reference sim values
+		- L_atX 	: liste of X position to plot profiles of S1 at
+		- dataSST 	: 1D SST jump
+		- zimax	: altitude max to plot profiles (in z/zi)
+		- path_save 	: where to save figures
+		- dpi 		: for figures
+	OUTPUT:
+		- a figure with the momentum efficiency, from surface to 0.3zi
+	"""
+	indt = -1 # for last instant for ref sim
+	n_uw = {}
+	dic_ABLH = {}
+	# computing efficiencies
+	for case in L_dsquadrant.keys():
+		uw_1 = L_dsquadrant[case]['uw_1']
+		uw_2 = L_dsquadrant[case]['uw_2']
+		uw_3 = L_dsquadrant[case]['uw_3']
+		uw_4 = L_dsquadrant[case]['uw_4']
+		uw_r = uw_1 + uw_2 + uw_3 + uw_4
+		if case in ['warm','cold']:	
+			gTHTV = ( dsref[case]['nomean']['Mean']['MEAN_TH']
+				* (1+1.61*dsref[case]['nomean']['Mean']['MEAN_RV'])
+				/ (1+dsref[case]['nomean']['Mean']['MEAN_RV']) )[indt].differentiate('level_les')
+			dic_ABLH[case] = Z[gTHTV.argmax('level_les').values].values
+			uw_sgs = dsref[case]['nomean']['Subgrid']['SBG_WU'][indt,:]
+			uw_2 = uw_2[0,:,:,:].mean(dim={'ni','nj'})
+			uw_4 = uw_4[0,:,:,:].mean(dim={'ni','nj'})
+			uw_r = uw_r[0,:,:,:].mean(dim={'ni','nj'})
+			uw   = (uw_sgs + uw_r).values	
+		elif case=='S1':	
+			uw_2 = MeanTurb(uw_2,Tstart,Tstop,window)
+			uw_4 = MeanTurb(uw_4,Tstart,Tstop,window)
+			uw_r = MeanTurb(uw_r,Tstart,Tstop,window)
+			uw   = dsflx.FLX_UW
+			dic_ABLH['S1'] = ABLH_S1	
+		n_uw[case] = uw_r / (uw_2+uw_4)	
+	# building a nice colormap
+	cmap_warm ='Reds'
+	cmap_cold ='winter' 
+	colorsX = DISCRETIZED_2CMAP_2(cmap_cold,cmap_warm,L_atX*1000,dataSST,crit_value,X.values)	
+	# plot
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	ax.plot(n_uw['cold'],Z/dic_ABLH['cold'],color='blue',label='cold',ls='--')
+	ax.plot(n_uw['warm'],Z/dic_ABLH['warm'],color='red',label='warm',ls='--')
+	for k,X1 in enumerate(L_atX):
+		indx = nearest(X.values,X1*1000)
+		ax.plot( n_uw['S1'].isel(ni=indx), Z/dic_ABLH['S1'],color=colorsX[k],label='S1 at X='+str(X1)+'km')
+	ax.set_ylabel('z/zi')
+	ax.set_xlim([0.0,1])
+	ax.set_ylim([0,zimax])
+	ax.xaxis.label.set_fontsize(13)
+	ax.yaxis.label.set_fontsize(13)
+	ax.set_xlabel(r" <$\~u \~w$> / <$\~u\~w_{II} + \~u\~w_{IV}$>")
+	ax.legend() 
+	ax.grid()
+	fig.savefig(path_save+'efficiency_uw.png')
+
+def plots_nice_flx_ref_CS1(Z,dsCS1,dsref,path_save,dpi):
+	""" Nicer plots than 'plots_ref_CS1' for uw and wthtv fluxes
+		2 figure with 2 plots each
+		
+		INPUTS : 
+			- Z : vertical coordinate (without halo)
+			- dsCS1 : dataset with conditional sampling filter, ouput of 'build_CS1' from module_building_files
+			- dsref : 000 MNH file opened with 'Open_LES_MEAN' from module_building_files
+			- path_save : where to save figures
+			- dpi : for the saved figures
+		OUTPUTS:
+			- uw and wthtv decomposition in coherent structure contributions, for both references
+		
+	"""
+	fig, ax = plt.subplots(1,2,figsize = (8,5),constrained_layout=True,dpi=dpi) # uw
+	fig2, ax2 = plt.subplots(1,2,figsize = (8,5),constrained_layout=True,dpi=dpi) # wthtv
+	
+	indt = -1 # t=+3h
+	
+	for i,case in enumerate(['cold','warm']):
+	
+		# Conditional sampling related
+		is_up = xr.where( dsCS1[case].global_objects==1,1,0)
+		is_sub = xr.where( dsCS1[case].global_objects==2,1,0)
+		is_down = xr.where( dsCS1[case].global_objects==3,1,0)
+		is_env = xr.where( dsCS1[case].global_objects==4,1,0)
+
+		global_objects = dsCS1[case].global_objects
+		TURB_COND = dsCS1[case].attrs['Turb_cond']
+		RV_DIFF = dsCS1[case].attrs['RV_DIFF']
+	
+		# Instantaneous fields
+		U,Um = dsCS1[case].UT,dsCS1[case].UT.mean(['ni','nj'])
+		W,Wm = dsCS1[case].WT,dsCS1[case].WT.mean(['ni','nj'])
+		THTV = Compute_THTV(dsCS1[case].THT,dsCS1[case].RVT)
+		THTVm = THTV.mean(['ni','nj'])
+		thtv_fluc = THTV - THTVm
+		u_fluc = U - Um
+		w_fluc = W - Wm
+		uw = u_fluc*w_fluc
+		wthtv = w_fluc*thtv_fluc
+		uw_mean= uw.mean(dim=['ni','nj']) # mean resolved uw
+		uw_up_p		,uw_sub_p	,uw_down_p	,uw_env_p 	= compute_flx_contrib(uw,[is_up,is_sub,is_down,is_env],meanDim=['ni','nj'])
+		wthtv_mean= wthtv.mean(dim=['ni','nj']) # mean resolved wthtv
+		wthtv_up_p,wthtv_sub_p,wthtv_down_p,wthtv_env_p = compute_flx_contrib(wthtv,[is_up,is_sub,is_down,is_env],meanDim=['ni','nj'])
+		
+		# mean fields
+		THT_case = dsref[case]['nomean']['Mean']['MEAN_TH'][indt,:]
+		THTV_case = dsref[case]['nomean']['Mean']['MEAN_THV'][indt,:]
+		ABLH = Z[THTV_case.differentiate('level_les').argmax().values].values
+		indzi = nearest(Z.values,1.1*ABLH) # looking at 1.1*zi to account for overshoots
+		RES_WTHV_case = dsref[case]['nomean']['Resolved']['RES_WTHV'][indt,:]
+		SBG_WTH_case = dsref[case]['nomean']['Subgrid']['SBG_WTHL'][indt,:]
+		SBG_WRT_case = dsref[case]['nomean']['Subgrid']['SBG_WRT'][indt,:]
+		SBG_WTHV_case = ( THTV_case/THT_case*SBG_WTH_case + 0.61*THT_case*SBG_WRT_case )
+		WTHV_total = RES_WTHV_case + SBG_WTHV_case
+		RES_UW_case = dsref[case]['nomean']['Resolved']['RES_WU'][indt,:]
+		SBG_UW_case = dsref[case]['nomean']['Subgrid']['SBG_WU'][indt,:]
+		UW_total = RES_UW_case + SBG_UW_case
+		# surface values		
+		Qv0 = SBG_WTHV_case[0]
+		u_star = dsref[case]['nomean']['Surface']['Ustar'][indt]
+
+		# uw 
+		somme = uw_up_p+uw_sub_p+uw_down_p #  +uw_env_p
+		part_up = mean_vertical_contrib(uw_up_p,uw_mean,indzi).values
+		part_sub = mean_vertical_contrib(uw_sub_p,uw_mean,indzi).values
+		part_down = mean_vertical_contrib(uw_down_p,uw_mean,indzi).values
+		part_env = mean_vertical_contrib(uw_env_p,uw_mean,indzi).values
+		obj_over_all = mean_vertical_contrib(somme,uw_mean,indzi).values
+		ax[i].plot( uw_up_p/u_star**2,Z/ABLH,c='red',label='up ('+str(np.round(part_up*100,1))+'%)')
+		ax[i].plot( uw_sub_p/u_star**2,Z/ABLH,c='purple',label='ss ('+str(np.round(part_sub*100,1))+'%)')
+		ax[i].plot( uw_down_p/u_star**2,Z/ABLH,c='green',label='down ('+str(np.round(part_down*100,1))+'%)')
+		#ax[i].plot( uw_env_p/u_star**2,Z/ABLH,c='grey',label='env ('+str(np.round(part_env*100,1))+'%)')
+		ax[i].plot( somme/u_star**2,Z/ABLH,c='black',label='all ('+str(np.round(obj_over_all*100,1))+'%)')
+		ax[i].plot( UW_total/u_star**2,Z/ABLH,c='k',label='mean',ls='--')
+		ax[i].set_ylim([0,1.2])
+		ax[i].grid()
+		ax[i].set_xlim([-1.5,0.5])
+		ax[i].legend(loc='upper left')
+		# wthtv
+		somme = wthtv_up_p+wthtv_sub_p+wthtv_down_p # +wthtv_env_p
+		print(case,'QV0=',Qv0.values,'min(wthtv)=',np.amin(WTHV_total.values))
+		part_up = mean_vertical_contrib(wthtv_up_p,wthtv_mean,indzi).values
+		part_sub = mean_vertical_contrib(wthtv_sub_p,wthtv_mean,indzi).values
+		part_down = mean_vertical_contrib(wthtv_down_p,wthtv_mean,indzi).values
+		part_env = mean_vertical_contrib(wthtv_env_p,wthtv_mean,indzi).values
+		obj_over_all = mean_vertical_contrib(somme,wthtv_mean,indzi).values
+		ax2[i].plot( wthtv_up_p/Qv0,Z/ABLH,c='red',label='up ('+str(np.round(part_up*100,1))+'%)')
+		ax2[i].plot( wthtv_sub_p/Qv0,Z/ABLH,c='purple',label='ss ('+str(np.round(part_sub*100,1))+'%)')
+		ax2[i].plot( wthtv_down_p/Qv0,Z/ABLH,c='green',label='down ('+str(np.round(part_down*100,1))+'%)')
+		#ax2[i].plot( wthtv_env_p/Qv0,Z/ABLH,c='grey',label='env ('+str(np.round(part_env*100,1))+'%)')
+		ax2[i].plot( somme/Qv0,Z/ABLH,c='black',label='all ('+str(np.round(obj_over_all*100,1))+'%)')
+		ax2[i].plot( WTHV_total/Qv0,Z/ABLH,c='k',label='mean',ls='--')
+		ax2[i].set_ylim([0,1.2])
+		ax2[i].grid()
+		ax2[i].set_xlim([-0.3,1.1])
+		ax2[i].legend(loc='upper right')
+		# format uw plot
+		ax[0].set_title(r'refC',loc='right')
+		ax[0].set_ylabel(r'z/$z_i$')
+		ax[0].set_xlabel(r"$<\~ u \~ w >/u^{*2}$")
+		ax[1].set_title(r'refW',loc='right')
+		ax[1].set_xlabel(r"$<\~ u \~ w >/u^{*2}$")
+		ax[0].xaxis.label.set_fontsize(13)
+		ax[0].yaxis.label.set_fontsize(13)
+		ax[1].xaxis.label.set_fontsize(13)
+		ax[1].yaxis.label.set_fontsize(13)
+		ax[0].xaxis.set_major_locator(MultipleLocator(0.5))
+		ax[0].grid(True,'major')
+		ax[1].xaxis.set_major_locator(MultipleLocator(0.5))
+		ax[1].grid(True,'major')
+		#ax[1].tick_params(axis='both',labelleft=False)
+		# format wthtv plot
+		ax2[0].set_title(r'refC',loc='right')
+		ax2[0].set_ylabel(r'z/$z_i$')
+		ax2[0].set_xlabel(r"$<\~ w \~ \theta_v >/ Q_v^*$")
+		ax2[1].set_title(r'refW',loc='right')
+		ax2[1].set_xlabel(r"$<\~ w \~ \theta_v >/ Q_v^*$")
+		#ax2[1].tick_params(axis='both',labelleft=False)		
+	# saving		
+	fig.savefig(path_save+'ref_uw_nice_flx.png')	
+	fig2.savefig(path_save+'ref_wthtv_nice_flx.png')	
+
+def flux_decomposition_at_Xkm(nameflx,X,Z,dsmean,dsCS1,dsref,dsflx,L_atX,PLOT_REF,PLOT_CONTRIB,path_saving,dpi):
+	"""This procedure is plotting the flux decomposition by the conditional sampling C10
+	
+	INPUTS :
+		- nameflx: what flux to decompose. Available are wthtv,uw,wrv,wtht
+		- X: X dimension
+		- Z: Z dimension
+		- dsmean: custom built file with mean profiles for prog. variables
+		- dsCS1: custom built file with masks for each coherent structures
+		- dsref: reference mean profiles
+		- dsflx: custom built file with mean flux
+		- L_atX: liste of X positions, in km
+		- PLOT_REF: switch to plot the reference total mean profile of the flux
+		- PLOT_CONTRIB: switch to plot the decomposition or not
+		- path_saving: where to save the figures
+		- dpi: dot per inches
+
+	OUTPUT:
+		- decomposition of 'nameflx' by coherent structure contributions, at some X positions (L_atX)
+	"""
+	indt_c = -1
+	indt_w = -1
+	l_indx = [nearest(X.values,atx*1000) for atx in L_atX]
+	indzi = nearest(Z.values,1.1*ABLH_S1)
+	# saving path
+	path_save2 = path_saving+'C10_m'+str(dsCS1.attrs['mCS'])+'_g'+str(dsCS1.attrs['gammaRv']*100) + '_SVT/S1/'
+	if not os.path.isdir(path_save2): # creat folder if it doesnt exist
+		os.makedirs(path_save2)
+	# normalization	
+	normX = 4 # km
+	indnormX = nearest(X.values,normX*1000)
+
+	# sauvegarde de U,W,THTV dans dsCS1 au point de masse est en cours.
+
+	if nameflx=='wthtv':
+		norm =  dsmean.Qv_star[indnormX].values
+		var1 = Compute_THTV(dsCS1.THT,dsCS1.RVT) - dsmean.THTvm
+		var2 = dsCS1.WT - dsmean.Wm
+		flux_mean_tot = dsflx.FLX_THvW
+		flux_mean = dsflx.FLX_THvW - dsflx.FLX_THvW_s
+		nicename = r"$<\~ w \~ \theta_v>$/$Q_v^*$"
+		bounds = [-0.7,3.5]
+	elif nameflx=='uw':
+		norm = dsmean.u_star[indnormX].values**2
+		var1 = dsCS1.UT - dsmean.Um
+		var2 = dsCS1.WT - dsmean.Wm
+		flux_mean_tot = dsflx.FLX_UW
+		flux_mean = dsflx.FLX_UW - dsflx.FLX_UW_s
+		nicename = r"$<\~ u \~ w>$/$u^{*2}$"
+		bounds = [-1.5,0.3]
+	elif nameflx=='wrv':
+		norm = dsmean.E0[indnormX].values
+		var1 = dsCS1.RVT - dsmean.RVTm
+		var2 = dsCS1.WT - dsmean.Wm
+		flux_mean_tot = dsflx.FLX_RvW
+		flux_mean = dsflx.FLX_RvW - dsflx.FLX_RvW_s
+		nicename = r"$<\~ w \~ r_v>$/$E^*$"
+		bounds = [-0.5,2]
+	elif nameflx=='wtht':
+		norm = - dsmean.Q_star[indnormX].values
+		var1 = dsCS1.THT - dsmean.THTm
+		var2 = dsCS1.WT - dsmean.Wm
+		flux_mean_tot = dsflx.FLX_THW
+		flux_mean = dsflx.FLX_THW - dsflx.FLX_THW_s
+		nicename = r"$<\~ w \~ \theta>$/$|Q^*|$"
+		bounds = [-10,10]
+	else:
+		raise Exception(nameflx+' is not recognized, aborting.')
+	
+	#flux_mean = flux.mean(dim=['time','nj']) # 
+	is_up = xr.where( dsCS1.global_objects==1,1,0)
+	is_sub = xr.where( dsCS1.global_objects==2,1,0)
+	is_down = xr.where( dsCS1.global_objects==3,1,0)
+	is_env = xr.where( dsCS1.global_objects==4,1,0)
+	is_up2 = xr.where( dsCS1.global_objects==5,1,0)
+	is_sub2 = xr.where( dsCS1.global_objects==6,1,0)
+
+	# PLOT
+	fig, ax = plt.subplots(1,3,figsize = (10,5),constrained_layout=True,dpi=dpi)
+
+	if PLOT_REF: # if True, plots the uw profils from references
+		if nameflx=='wthtv':
+			THT_c = dsref['cold']['nomean']['Mean']['MEAN_TH'][indt_c,:]
+			THT_w = dsref['warm']['nomean']['Mean']['MEAN_TH'][indt_w,:]
+			RV_c = dsref['cold']['nomean']['Mean']['MEAN_RV'][indt_c,:]
+			RV_w = dsref['warm']['nomean']['Mean']['MEAN_RV'][indt_w,:]
+			THTV_c = Compute_THTV(THT_c,RV_c) 
+			THTV_w = Compute_THTV(THT_w,RV_w)
+			RES_WTHV_c = dsref['cold']['nomean']['Resolved']['RES_WTHV'][indt_c,:]
+			RES_WTHV_w = dsref['warm']['nomean']['Resolved']['RES_WTHV'][indt_w,:]
+			SBG_WTHV_c = THTV_c/THT_c*dsref['cold']['nomean']['Subgrid']['SBG_WTHL'][indt_c,:] + 0.61*THT_c*dsref['cold']['nomean']['Subgrid']['SBG_WRT'][indt_c,:]
+			SBG_WTHV_w = THTV_w/THT_w*dsref['warm']['nomean']['Subgrid']['SBG_WTHL'][indt_w,:] + 0.61*THT_w*dsref['warm']['nomean']['Subgrid']['SBG_WRT'][indt_w,:]
+			flx_c = RES_WTHV_c + SBG_WTHV_c
+			flx_w = RES_WTHV_w + SBG_WTHV_w
+		elif nameflx=='uw':
+			flx_c = dsref['cold']['nomean']['Resolved']['RES_WU'][indt_c,:] + dsref['cold']['nomean']['Subgrid']['SBG_WU'][indt_c,:] 
+			flx_w = dsref['warm']['nomean']['Resolved']['RES_WU'][indt_w,:] + dsref['warm']['nomean']['Subgrid']['SBG_WU'][indt_c,:]
+		elif nameflx=='wrv':
+			flx_c = dsref['cold']['nomean']['Resolved']['RES_WRT'][indt_c,:] + dsref['cold']['nomean']['Subgrid']['SBG_WRT'][indt_c,:] 
+			flx_w = dsref['warm']['nomean']['Resolved']['RES_WRT'][indt_w,:] + dsref['warm']['nomean']['Subgrid']['SBG_WRT'][indt_w,:]
+		elif nameflx=='wtht':
+			flx_c = dsref['cold']['nomean']['Resolved']['RES_WTH'][indt_c,:] + dsref['cold']['nomean']['Subgrid']['SBG_WTH'][indt_c,:] 
+			flx_w = dsref['warm']['nomean']['Resolved']['RES_WTH'][indt_w,:] + dsref['warm']['nomean']['Subgrid']['SBG_WTH'][indt_w,:]
+		gTHTV_w = Compute_THTV( dsref['warm']['nomean']['Mean']['MEAN_TH'],
+								dsref['warm']['nomean']['Mean']['MEAN_RV'])[indt_w].differentiate('level_les')
+		gTHTV_c = Compute_THTV( dsref['cold']['nomean']['Mean']['MEAN_TH'],
+								dsref['cold']['nomean']['Mean']['MEAN_RV'])[indt_c].differentiate('level_les')
+		zi_c,  zi_w = ( Z[gTHTV_c.argmax('level_les').values].values, 
+						Z[gTHTV_w.argmax('level_les').values].values )
+		ax[i].plot( -flx_c/flx_c[0],Z/zi_c, c='b', label='mean refC')
+		ax[i].plot( -flx_w/flx_w[0],Z/zi_w, c='r', label='mean refW')
+	
+	savename=''
+	for i,indx in enumerate(l_indx):
+		if PLOT_CONTRIB: # if False, plot only the total contribution of coherent structures
+			flux = var1.isel(ni=indx)*var2.isel(ni=indx)
+			flx_up_p,flx_sub_p,flx_up_p2,flx_sub_p2,flx_down_p,flx_env_p = compute_flx_contrib(flux,
+																				[is_up.isel(ni=indx),is_sub.isel(ni=indx),
+					 															is_up2.isel(ni=indx),is_sub2.isel(ni=indx),
+																				is_down.isel(ni=indx),is_env.isel(ni=indx)],
+																				meanDim=['time','nj'])
+	
+			flx_summ = (flx_up_p + flx_sub_p + flx_up_p2 + flx_sub_p2 + flx_down_p + flx_env_p )
+
+			# vertically integrated contributions
+			flx_part_up 	= mean_vertical_contrib((flx_up_p),(flux_mean).isel(ni=indx),indzi).values
+			flx_part_sub 	= mean_vertical_contrib((flx_sub_p),(flux_mean).isel(ni=indx),indzi).values
+			flx_part_up2 	= mean_vertical_contrib((flx_up_p2),(flux_mean).isel(ni=indx),indzi).values
+			flx_part_sub2 	= mean_vertical_contrib((flx_sub_p2),(flux_mean).isel(ni=indx),indzi).values
+			flx_part_down 	= mean_vertical_contrib((flx_down_p),(flux_mean).isel(ni=indx),indzi).values
+			#flx_part_env 	= mean_vertical_contrib((flx_env_p),(flux_mean).isel(ni=indx),indzi).values
+			flx_obj_over_all = mean_vertical_contrib(flx_summ,(flux_mean).isel(ni=indx),indzi).values
+
+			ax[i].plot( flx_up_p/norm,Z/ABLH_S1	,c='red'	,label='up ('		+str(np.round(flx_part_up*100,1))	+'%)')
+			ax[i].plot( flx_sub_p/norm,Z/ABLH_S1	,c='purple'	,label='ss ('	+str(np.round(flx_part_sub*100,1))	+'%)') # sub. shells
+			ax[i].plot( flx_up_p2/norm,Z/ABLH_S1	,c='orange'	,label='up 2 ('	+str(np.round(flx_part_up2*100,1))	+'%)')
+			ax[i].plot( flx_sub_p2/norm,Z/ABLH_S1,c='pink'	,label='ss 2 ('+str(np.round(flx_part_sub2*100,1))	+'%)')
+			ax[i].plot( flx_down_p/norm,Z/ABLH_S1,c='green'	,label='down ('	+str(np.round(flx_part_down*100,1))	+'%)')
+			ax[i].plot( flx_summ/norm,Z/ABLH_S1	,c='k'		,label='all ('			+str(np.round(flx_obj_over_all*100,1))+'%)')
+		ax[i].plot( flux_mean_tot[:,indx]/norm,Z/ABLH_S1	,c='k'		,label='mean S1',ls='--')
+		ax[i].set_title("X="+str(L_atX[i])+"km",loc='right')
+		ax[i].set_xlabel(nicename)
+		ax[i].legend(loc='upper right')
+		if nameflx in ['uw'] :
+			ax[i].legend(loc='upper left')
+		ax[i].set_ylim([0,1.2])
+		ax[i].set_xlim(bounds)
+		ax[i].grid(True)
+		ax[i].xaxis.label.set_fontsize(13)
+		ax[i].yaxis.label.set_fontsize(13)
+		savename = savename+str(int(L_atX[i]))+'_'
+	ax[0].set_ylabel(r'z/z$_i$')
+	#fig.savefig(path_save2+nameflx+'_flux_decomposition_10_13_23_km.png')
+	fig.savefig(path_save2+nameflx+'_flux_decomposition_'+savename+'km.png')
+
+def Contrib_flux_Tau(chunksNOHALO,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,path_CS1,dpi):
+	"""
+	This procedure is plotting the contribution of the different coherent structures detected by a chosen conditonal sampling.
+	The input data should have different radio decay for the passive tracers (same tau for all tracers)
+	
+	INPUTS
+		- chunksNOHALO 	: chunks sizes when MNH halo has already been removed
+		- data 			: 3D fields, with conditional sampling filter, data is ouput of 'build_CS1' from module_building_files
+		- data_mean 	: mean fields from 000 diachronic file, opened with 'Open_LES_MEAN' from module_building_files
+		- param_COND 	: parameters for conditional samplings
+		- L_TURB_COND 	: choice of conditional sampling
+		- SVT_type 		: type of tracer used, 'SVT' or 'RV'
+		- RV_DIFF 		: if SVT_type=='RV', choose between using fluctuations of RV
+							with respect to horizontal mean value or mean mixed layer value
+		- path_CS1 		: where to save the CS files and the plot
+		- dpi 			: for figures
+		
+	OUTPUT
+		a plot with 2 figures (one for flux uw and one for wthtv):
+			- Y axis : contribution to the flux for each structure
+			- X axis : radio decay constante (tau)
+	
+	NOTE 07/08/24 : tau has been changed for nu to be consistent with paper notation
+		 02/12/24 : this function has been designed with a width of the simulation of 2 km.
+	
+	"""
+	
+	L_name = ['up','sub','down','env','all']
+	L_col = ['red','purple','green','grey','black']
+	Tau = np.array([1,4,7,10,12,15,20,30,40])
+	Tauref = 15
+	indTauref = nearest(Tau,Tauref)
+	# 1) building CS for each files
+	SEUIL_ML = 0.5
+	indt = -1				# time index for ref simus, -1 <=> t=+3h
+	build_CS1(nhalo,data,data_mean,param_COND,
+		L_TURB_COND,SVT_type,RV_DIFF,0.5,-1,path_CS1)
+	for case in data.keys(): data[case].close() # closing OUT files
+	# 2) getting flux decomposition
+	TURB_COND = L_TURB_COND[0]
+	dsCS = {'1min':xr.open_dataset(path_CS1+'CS1_1min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
+			'4min':xr.open_dataset(path_CS1+'CS1_4min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
+			'7min':xr.open_dataset(path_CS1+'CS1_7min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
+			'10min':xr.open_dataset(path_CS1+'CS1_10min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
+			'12min':xr.open_dataset(path_CS1+'CS1_12min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
+			'15min':xr.open_dataset(path_CS1+'CS1_15min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
+			'20min':xr.open_dataset(path_CS1+'CS1_20min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
+			'30min':xr.open_dataset(path_CS1+'CS1_20min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
+			'40min':xr.open_dataset(path_CS1+'CS1_20min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO)}
+	flx_uw = np.zeros((len(dsCS.keys()),5)) # 9 tau and 5 structures (objects + their sum)
+	flx_wthtv = np.zeros((len(dsCS.keys()),5)) # 9 tau and 5 structures (objects + their sum)
+	for i,case in enumerate(dsCS.keys()):
+		ds = dsCS[case]
+		# pathsave
+		path_save2 = path_CS1 + 'Sensitivity_tau_' + TURB_COND
+		if TURB_COND=='C10':
+			mCS = ds.attrs['mCS']
+			gammaRV = ds.attrs['gammaRv']
+			path_save2 = path_save2+'_m'+str(mCS)+'_g'+str(gammaRV*100)
+		elif TURB_COND=='ITURB2':
+			gammaTurb2 = ds.attrs['gammaTurb2']
+			path_save2 = path_save2+'_g'+str(gammaTurb2*100)
+		elif TURB_COND=='ITURB':
+			gammaTurb1 = ds.attrs['gammaTurb1']
+			path_save2 = path_save2+ '_g'+str(gammaTurb1*100)
+		elif TURB_COND=='EC':
+			gammaEc = ds.attrs['gammaEc']
+			path_save2 = path_save2 +'_g'+str(gammaEc*100)
+		if SVT_type=='RV':
+			path_save2 = path_save2+'_'+RV_DIFF+'_'+SVT_type+'.png'
+		else:
+			path_save2 = path_save2+'_'+SVT_type+'.png'
+		
+		uw = (ds.UT - ds.UTm)*ds.WT
+		wthtv = ds.WT*(ds.THTV - ds.THTVm)
+		uw_m = uw.mean(dim=['ni','nj'])
+		wthtv_m = wthtv.mean(dim=['ni','nj'])
+		uw_obj = {}
+		wthtv_obj = {}
+		uw_obj['all'],wthtv_obj['all'] = np.zeros((5)),np.zeros((5))
+		gTHTv = ds.THTVm[:,0,0].differentiate('level')
+		ABLHm = ds.level[gTHTv.argmax(dim='level').values].mean().values
+		indzi = nearest(ds.level.values,1.1*ABLHm)
+		sum1,sum2 = np.zeros(len(ds.level)),np.zeros(len(ds.level))
+		for k,struc in enumerate(['up','sub','down','env']):
+			# first flux decomposition
+			temp1 =	compute_flx_contrib(uw,[ds['is_'+struc]],meanDim=['ni','nj'])
+			temp2 =	compute_flx_contrib(wthtv,[ds['is_'+struc]],meanDim=['ni','nj'])
+			sum1 = sum1 + temp1
+			sum2 = sum2 + temp2
+			# then vertical average
+			flx_uw[i,k] = mean_vertical_contrib(temp1,uw_m,indzi)
+			flx_wthtv[i,k] = mean_vertical_contrib(temp2,wthtv_m,indzi)
+		# get contribution from all detected structures
+		flx_uw[i,-1] = mean_vertical_contrib(sum1,uw_m,indzi)
+		flx_wthtv[i,-1] = mean_vertical_contrib(sum2,wthtv_m,indzi)
+	# 3) Plotting
+	fig, ax = plt.subplots(2,1,figsize = (5,8),constrained_layout=True,dpi=dpi)
+	ax1 = inset_axes(ax[0], width="60%", height="50%", loc=4,borderpad=2)
+	ax2 = inset_axes(ax[1], width="60%", height="50%", loc=4,borderpad=2)
+	for k in range(len(L_name)):
+		if L_name[k]!='env':
+			ax[0].plot(Tau,(flx_uw[:,k]-flx_uw[indTauref,k])*100,c=L_col[k],label=L_name[k])
+			ax1.plot(Tau,(flx_uw[:,k]-flx_uw[indTauref,k])*100,c=L_col[k],label=L_name[k])
+			ax[1].plot(Tau,(flx_wthtv[:,k]-flx_wthtv[indTauref,k])*100,c=L_col[k],label=L_name[k])
+			ax2.plot(Tau,(flx_wthtv[:,k]-flx_wthtv[indTauref,k])*100,c=L_col[k],label=L_name[k])
+	ax[0].set_ylabel('Contribution anomaly \n'+r'(% over $\nu$='+str(Tauref)+'min)')
+	ax[0].set_title(r"$< \~ u \~w >$",loc='left')
+	ax[0].legend(loc='upper right')
+	ax[1].set_xlabel(r'$\nu$ (min)')
+	ax[1].set_ylabel('Contribution anomaly \n'+r'(% over $\nu$='+str(Tauref)+'min)')
+	ax[1].set_title(r"$< \~ w \~ \theta_v>$",loc='left')
+	#fig.suptitle(r'Sensitivity tests on $\tau$')
+	ax1.set_ylim([-5,5])
+	ax2.set_ylim([-5,5])
+	fig.savefig(path_save2)
+	
+	# absolute values
+
+def movie_coherent_structures_cleaner(X,Y,Z,dsCS1,dsmean,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save):
+	"""
+	This procedure is plotting the images needed to build a movie of the coherent structures.
+	Same as 'movie_coherent_structures' but with few plots and coherent structure categories.
+	
+	INPUTS:
+		- X			: X dimension of the sim
+		- Y			: Y dimension of the sim
+		- Z			: Z dimension of the sim
+		- dsCS1		: custom built file with conditional sampling
+		- dsmean	: custom built file with mean variables
+		- dataSST	: 1D SST(x)
+		- SEUIL_ML	: thetav threshold to detect mixed layer
+		- ini_t 	: integer, index of time. instant of interested to start from
+		- ini_x 	: integer, index of ni. X position of interested to start from
+		- tmin 		: how far back in time to look 
+		- tmax 		: how far forward in time to look
+		- fps 		: movie frame per seconde
+		- stepy 	: vector field : skipping cells Y
+		- stepz 	: vector field : skipping cells Z
+		- Awidth 	: vector field : arrow width
+		- scale 	: vector field : size of arrows
+		- path_save : where to save images/movie
+		
+	OUPUTS : 
+		- images to build the movie
+		- command line to build the movie (with ffmpeg)
+	"""
+	BOOL_SST = False
+	# getting global objects
+	u_f = dsCS1.UT-dsmean.UTm
+	v_f = dsCS1.VT-dsmean.VTm
+	w_f = dsCS1.WT-dsmean.WTm
+	gTHTV = dsmean.THTVm[0,:,0,:].differentiate('level')
+	RV,RVm = dsCS1.RVT,dsmean.RVTm
+	THT,THTm = dsCS1.THTV,dsmean.THTVm
+	# getting advection velocity : for now is = constant
+	ABLH = 600 	# m
+	dt = 30 	# s, OUT frequency
+	dx = 50		# m, horizontal res
+	indzzi = nearest(Z.values,1*ABLH)
+	U = 6.53 # m/s, = dsmean.Um.isel(level=slice(0,indzzi)).mean(dim='ni').integrate('level') / ABLH
+	fetch = int(np.round(U*dt/dx,0)) # to get integer
+	unity = xr.ones_like(RV)
+	zeros = unity - 1
+
+	path_save2 = path_save + 'T'+str(tmin)+'-T'+str(tmax)+'_t'+str(ini_t)+'_i'+str(ini_x)+'/'
+	path_save_frames = path_save2 + 'frames_clean_C10/'
+	if not pathlib.Path(path_save_frames).is_dir():
+		os.makedirs(path_save_frames)
+	obj = dsCS1.global_objects
+	cmap = c.ListedColormap(['white','r','purple','orange','pink','g',])
+	c_range = np.arange(0,6,1)
+	c_label = ['other','up','ss','up2','ss2','down']
+	obj_max = 5.5
+	obj_clean = obj
+	obj_clean = xr.where(obj==1,unity,zeros) # updrafts
+	obj_clean = xr.where(obj==2,2*unity,obj_clean) # ss
+	obj_clean = xr.where(obj==5,3*unity,obj_clean) # updrafts 2
+	obj_clean = xr.where(obj==6,4*unity,obj_clean) # ss2
+	obj_clean = xr.where(obj==3,5*unity,obj_clean) # downdrafts
+		
+	print('	TURB_COND=C10','ini_t=',ini_t,'ini_x=',ini_x,'U=',U,',fetch=',fetch)
+	L_t = np.zeros(tmax-tmin+1,dtype=np.int32)
+	L_f = np.zeros(tmax-tmin+1,dtype=np.int32)
+	RVmixed = np.zeros(tmax-tmin+1)
+	THTmixed = np.zeros(tmax-tmin+1)
+	
+	print('	looking back up to tmin')
+	t = ini_t
+	f = ini_x
+	while t >= tmin:
+		indx = f 
+		print('		time,indx =',t,indx)
+		# computing rvmixed(x)
+		ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
+		RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
+		THTmixed[t-tmin] = ( THTm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values		
+		L_t[t-tmin] = t
+		L_f[t-tmin] = f
+		t = t-1
+		f = indx - fetch
+		if f==0: f = 768-1 # cyclic condition
+		
+	print('	looking forward up to tmax')
+	t = ini_t
+	f = ini_x
+	while t <= tmax:
+		indx = f 
+		print('		time,indx =',t,indx)
+		# computing rvmixed(x)
+		ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
+		RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
+		THTmixed[t-tmin] = ( THTm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
+		L_t[t-tmin] = t
+		L_f[t-tmin] = f
+		t = t+1
+		f = indx + fetch
+		if f==768-1: f = 0 # cyclic condition
+	# Plot	
+	print(' Plotting ...')
+	for t in L_t:
+		indx = L_f[t-tmin]
+		
+		if BOOL_SST:
+			fig = plt.figure(figsize = (8,8),layout="constrained",dpi=200)
+			gs = GridSpec(2, 4, figure=fig)
+			# -> SST
+			ax1 = fig.add_subplot(gs[2,:])
+			ax1.plot(X/1000,dataSST,c='k')
+			ax1.scatter(X[indx]/1000,dataSST[indx],marker='x',c='k')
+			ax1.set_ylabel('SST (K)')
+			ax1.set_xlabel('X (km)')
+		else:
+			fig = plt.figure(figsize = (7.5,6.1),layout="constrained",dpi=200)
+			gs = GridSpec(1, 4, figure=fig)
+		# -> obj
+		ax2 = fig.add_subplot(gs[0,0:2])
+		s = ax2.pcolormesh( Y/1000,Z/ABLH,obj_clean[t,:,:,indx],cmap=cmap,vmin=-0.5,vmax=obj_max)
+		Q = ax2.quiver(Y[::stepy]/1000,Z[::stepz]/ABLH,v_f[t,::stepz,::stepy,indx],w_f[t,::stepz,::stepy,indx],
+				angles='uv',pivot='middle',width=Awidth,headwidth=3,headaxislength=2,headlength=2,scale=scale)
+		cbar = plt.colorbar(s,ax=ax2,pad=0.05,orientation='horizontal',aspect=10)
+		cbar.set_ticks(c_range)
+		cbar.ax.set_xticklabels(c_label,rotation=45)
+		ax2.set_aspect(2.0)
+		ax2.quiverkey(Q, 0.43, 0.17, 1, '1 m/s', labelpos='E',coordinates='figure',angle=0) # Reference arrow horizontal
+		ax2.set_ylabel(r'z/$z_i$')
+		ax2.set_ylim([0,1.2])
+		ax2.set_xlabel('Y (km)')
+		ax2.set_title('objects',loc='right')
+		# -> thtmixed
+		"""
+		To add thtv, i would need to remove the warming trend from the data. 
+		THTVm is a time average so if i plot thtv-thtvm it is not representative of instantaneous buoyancy
+		"""
+#		ax3 = fig.add_subplot(gs[0:3,2:4])
+#		s = ax3.pcolormesh( Y/1000,Z/ABLH, (THT-THTmixed[t-tmin])[t,:,:,indx],cmap='bwr',vmin=-1,vmax=1) # 
+#		plt.colorbar(s,ax=ax3,pad=0.05,orientation='horizontal',aspect=10)
+#		ax3.set_ylim([0,1.2])
+#		ax3.set_aspect(2.0)
+#		ax3.set_title(r'$\theta_v$ - $\theta_{v,mixed}$',loc='right')
+
+		# -> rvmixed
+		ax4 = fig.add_subplot(gs[0,2:])
+		s = ax4.pcolormesh( Y/1000,Z/ABLH, (RV-RVmixed[t-tmin])[t,:,:,indx]*1000,cmap='BrBG',vmin=-1,vmax=1)
+		plt.colorbar(s,ax=ax4,pad=0.05,orientation='horizontal',aspect=10)
+		ax4.set_ylim([0,1.2])
+		ax4.set_aspect(2.0)
+		ax4.tick_params(axis='both',labelleft=False)
+		ax4.set_title(r'r$_v$ - r$_{v,mixed}$ (g.kg$^{-1}$)',loc='right')
+		fig.suptitle('obj C10'+', t='+str(t)+', i='+str(indx))
+		ax4.set_xlabel('Y (km)')
+		fig.savefig(path_save_frames+f"{t:03}"+'.png')
+		plt.close(fig)
+	# building movie
+	print(' Building movie with the following cmd:')
+	print('ffmpeg -framerate '+str(fps)+' -start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save2+'movie_clean_C10.mp4')
+
+def movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save):
+	"""
+	This procedure is plotting the images needed to build a movie of the coherent structures evolution
+	
+	INPUTS:
+		- X			: X dimension of the sim
+		- Y			: Y dimension of the sim
+		- Z			: Z dimension of the sim
+		- L_TURB_COND : Choice of conditional sampling (C10 or ITURB2)
+		- dataSST	: 1D SST(x)
+		- SEUIL_ML	: thetav threshold to detect mixed layer
+		- ini_t 	: integer, index of time. instant of interested to start from
+		- ini_x 	: integer, index of ni. X position of interested to start from
+		- tmin 		: how far back in time to look 
+		- tmax 		: how far forward in time to look
+		- fps 		: movie frame per seconde
+		- stepy 	: vector field : skipping cells Y
+		- stepz 	: vector field : skipping cells Z
+		- Awidth 	: vector field : arrow width
+		- scale 	: vector field : size of arrows
+		- path_save : where to save images/movie
+		
+	OUPUTS : 
+		- images to build the movie
+		- command line to build the movie (with ffmpeg)
+	"""	
+	
+	ds = xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN.nc',chunks=chunksNOHALO)
+	# getting global objects
+	u_f = ds.UT-ds.UTm
+	v_f = ds.VT-ds.VTm
+	w_f = ds.WT-ds.WTm
+	sv1_f = ds.SV1-ds.SV1m
+	sv4_f = ds.SV4-ds.SV4m
+	sv3_f = ds.SV3-ds.SV3m
+	gTHTV = ds.THTVm[0,:,0,:].differentiate('level')
+	RV,RVm = ds.RVT,ds.RVTm
+	# getting advection velocity : for now is constant
+	ABLH = 600 	# m
+	dt = 30 	# s, OUT frequency
+	dx = 50		# m, horizontal res
+	indzzi = nearest(Z.values,1*ABLH)
+	U = 6.53 # m/s, = dsmean.Um.isel(level=slice(0,indzzi)).mean(dim='ni').integrate('level') / ABLH
+	fetch = int(np.round(U*dt/dx,0)) # to get integer
+	
+	# test : does the intg. advection velocity changes along x ? and if yes how much ?
+	# TBD
+	
+	for TURB_COND in L_TURB_COND:
+		path_save2 = path_save + 'T'+str(tmin)+'-T'+str(tmax)+'_t'+str(ini_t)+'_i'+str(ini_x)+'/'
+		path_save_frames = path_save2 + 'frames_'+TURB_COND+'/'
+		if not pathlib.Path(path_save_frames).is_dir():
+			os.makedirs(path_save_frames)
+		if TURB_COND=='C10':
+			obj = ds.global_objects
+			cmap = c.ListedColormap(['white','r','purple','g','grey','orange','pink'])
+			c_range = np.arange(0,7,1)
+			c_label = ['other','up','ss','down','env','up2','ss2']
+			obj_max = 6.5
 			
+		print('	TURB_COND=',TURB_COND,'ini_t=',ini_t,'ini_x=',ini_x,'U=',U,',fetch=',fetch)
+		L_t = np.zeros(tmax-tmin+1,dtype=np.int32)
+		L_f = np.zeros(tmax-tmin+1,dtype=np.int32)
+		RVmixed = np.zeros(tmax-tmin+1)
+		
+		print('	looking back up to tmin')
+		t = ini_t
+		f = ini_x
+		while t >= tmin:
+			indx = f 
+			print('		time,indx =',t,indx)
+			# computing rvmixed(x)
+			ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
+			RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
+			L_t[t-tmin] = t
+			L_f[t-tmin] = f
+			t = t-1
+			f = indx - fetch
+			if f==0: f = 768-1 # cyclic condition
+			
+		print('	looking forward up to tmax')
+		t = ini_t
+		f = ini_x
+		while t <= tmax:
+			indx = f 
+			print('		time,indx =',t,indx)
+			# computing rvmixed(x)
+			ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
+			RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
+			
+			L_t[t-tmin] = t
+			L_f[t-tmin] = f
+			t = t+1
+			f = indx + fetch
+			if f==768-1: f = 0 # cyclic condition
+		# Plot	
+		print('	Plotting ...')
+		for t in L_t:
+			indx = L_f[t-tmin]
+			fig = plt.figure(figsize = (15,8),layout="constrained",dpi=200)
+			gs = GridSpec(4, 8, figure=fig)
+			# -> SST
+			ax1 = fig.add_subplot(gs[3,:])
+			ax1.plot(X/1000,dataSST,c='k')
+			ax1.scatter(X[indx]/1000,dataSST[indx],marker='x',c='k')
+			ax1.set_ylabel('SST (K)')
+			ax1.set_xlabel('X (km)')
+			# -> obj
+			ax2 = fig.add_subplot(gs[0:3,0:2])
+			s = ax2.pcolormesh( Y/1000,Z/ABLH,obj[t,:,:,indx],cmap=cmap,vmin=-0.5,vmax=obj_max)
+			Q = ax2.quiver(Y[::stepy]/1000,Z[::stepz]/ABLH,v_f[t,::stepz,::stepy,indx],w_f[t,::stepz,::stepy,indx],
+					angles='uv',pivot='middle',width=Awidth,headwidth=3,headaxislength=2,headlength=2,scale=scale)
+			cbar = plt.colorbar(s,ax=ax2,pad=0.05,orientation='horizontal',aspect=10)
+			cbar.set_ticks(c_range)
+			cbar.ax.set_xticklabels(c_label,rotation=45)
+			ax2.set_aspect(2.0)
+			ax2.quiverkey(Q, 0.05, 0.9, 1, '1 m/s', labelpos='E',coordinates='figure',angle=0) # Reference arrow horizontal
+			ax2.set_ylabel('z/zi')
+			ax2.set_ylim([0,1.2])
+			ax2.set_title('objects',loc='right')
+			# -> surface tracers
+			ax3 = fig.add_subplot(gs[0:3,2:4])
+			linthresh = 0.01
+			vmextrm = 10
+			rounding = 2 # this is linthresh = 10^(-rounding)
+			sfx_tracer = xr.where(ds.SV1>ds.SV4,sv1_f.where(sv1_f>0),-sv4_f.where(sv4_f>0))
+			NORM = c.SymLogNorm(linthresh=linthresh, linscale=0.03,vmin=-vmextrm, vmax=vmextrm, base=10)
+			s = ax3.pcolormesh( Y/1000,Z/ABLH, sfx_tracer[t,:,:,indx],cmap='PuOr',norm=NORM) # 
+			cb = plt.colorbar(s,ax=ax3,pad=0.05,orientation='horizontal',aspect=10)
+			major_loc = np.round(cb.get_ticks(),rounding)
+			minor_loc = Minor_ticks_symLog(major_loc,linthresh)
+			if linthresh in cb.get_ticks():
+				major_loc = np.delete(major_loc,[len(major_loc)//2-1,len(major_loc)//2+1])
+			cb.set_ticks(minor_loc,minor=True)
+			cb.set_ticks(major_loc)
+			cb.set_ticklabels([str(np.abs(np.round(tick,rounding))) for tick in major_loc])
+			ax3.set_ylim([0,1.2])
+			ax3.set_aspect(2.0)
+			ax3.set_title('surface tracers',loc='right')
+			# -> top tracer
+			ax4 = fig.add_subplot(gs[0:3,4:6])
+			s = ax4.pcolormesh( Y/1000,Z/ABLH, sv3_f[t,:,:,indx],cmap='Blues',vmin=0.1,vmax=500,norm="log")
+			plt.colorbar(s,ax=ax4,pad=0.05,orientation='horizontal',aspect=10)
+			ax4.set_ylim([0,1.2])
+			ax4.set_aspect(2.0)
+			ax4.set_title('top tracer',loc='right')
+			# -> rvmixed
+			ax5 = fig.add_subplot(gs[0:3,6:])
+			s = ax5.pcolormesh( Y/1000,Z/ABLH, (RV-RVmixed[t-tmin])[t,:,:,indx]*1000,cmap='BrBG',vmin=-1,vmax=1)
+			plt.colorbar(s,ax=ax5,pad=0.05,orientation='horizontal',aspect=10)
+			ax5.set_ylim([0,1.2])
+			ax5.set_aspect(2.0)
+			ax5.set_title(r'r$_v$ - r$_{v,mixed}$',loc='right')
+			fig.suptitle('obj '+TURB_COND+', t='+str(t)+', i='+str(indx))
+			fig.savefig(path_save_frames+f"{t:03}"+'.png')
+			plt.close(fig)
+		# building movie
+		print(' Building movie with the following cmd:')
+		print('ffmpeg -framerate '+str(fps)+' -start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save2+'movie_'+TURB_COND+'.mp4')
+		#os.system('ffmpeg -framerate '+str(fps)+'-start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save+'movie.mp4')
+
+def CS_m_sensitivity(X,Z,CHOIX,data,data_mean,dsflx,TURB_COND,L_choice,chunksNOHALO,i,t,atX,path_save,path_CS1,dpi):
+	"""This procedure is looking at the sensitivity of TURB_COND conditional sampling to m
+	
+	
+	A point is considered 'turbulent' if:
+	-> for 'ITURB3'	I_turb > m*I_turb_min
+	-> for 'C10' 	sv' > m.max(std_min,std)
+		
+		with I_turb = sqrt(2/3*E) / sqrt(Um**2+Vm**2+Wm**2)
+		and I_turb_min the vertically integrated value of <I_turb>ty (see Integ_min3)
+		and std_min the vertically integrated value of <std(sv)>ty (see Integ_min3)
+		
+	INPUTS: 
+		- X 		: X dimension of the domain
+		- Y 		: Y dimension of the domain
+		- Z 		: Z dimension of the domain
+		- data		: data to build C10 file 
+		- data_mean	: mean fields
+		- dsflx 	:  dataset with mean fluxes of S1
+		- TURB_COND : 'C10' or 'ITURB3'
+		- L_choice 	: what plot to do, see OUTPUTS
+		- chunksNOHALO : chunks when halo has already been removed
+		- i 		: ni index for YZ plot (not used yet)
+		- t 		: time index for YZ plot (not used yet)
+		- atX 		: in km, where to plot mean profiles
+		- path_save : where to save the plots
+		- path_CS1	: where to save the .nc
+		- dpi 		: for the figures
+		
+	OUTPUTS:
+		if '1': profiles of fluxes at atX km
+		if '2': profiles of fluxes + top hat decomposition  at atX km
+		if '3': cover at atX km
+	"""
+	#path_save = path_save + 'test_m'+TURB_COND+'/'
+	
+	# building files for different m values
+	#  default parameters
+	param_COND = {'C10':(1,	# if C10 : strength of the conditionnal sampling (default = 1)
+				0.005),		# if C10 : set the fraction of <rv'²> under each z to detect objects (default = 0.05)
+							# if C10 and RV : m=0.3 g=1 ?
+			'ITURB':0.05,	# if ITURB : set the minimum turbulence intensity to detect objects (defaut for ref = 0.05)
+			'ITURB2':0.75,	# if ITURB2 : set the fraction of mean of Iturb under each z
+			'ITURB3':(1,0.75),# if ITURB3 : set strength of CS and minimum of turbulence, if m=1 then is ITURB2
+			'EC':0.5}		# if EC : set the fraction of mean of Ec under each z	
+	L_TURB_COND = ['C10']# 'C10','ITURB','ITURB2','EC' C10 is the threshold of Couvreux 2010
+	SVT_type = 'SVT'		# 'SVT' or 'RV' : choose which tracer to use
+	RV_DIFF = 'MEAN' 		# if RV : how rv' are computed : MEAN, MIXED, MIDDLE_MIXED. best is MIXED
+	SEUIL_ML = 0.5 			# K/km, for mixed layer detection on thtv
+	indt = -1				# time index for ref simus, -1 <=> t=+3h
+	
+	for m in [0.25,0.5]:
+		param_COND['C10'] = (m,0.005)
+		build_CS1(nhalo,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,SEUIL_ML,indt,path_CS1)
+	chunksNOHALO_interp = {'time':-1,
+				'level':16,
+				'nj':21,
+				'ni':-1}
+	# data
+	#dsO = data[name]
+	#dsO_i = mass_interpolator(dsO,chunksNOHALO_interp).isel(level=slice(nhalo,-nhalo),ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo)) # this is not necessary, remove the isel
+	dsmean = data_mean[CHOIX]
+	data = {'0.25':xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_'+CHOIX+'_C10_SVTMEAN_m0.25.nc',chunks=chunksNOHALO),
+			'0.5':xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_'+CHOIX+'_C10_SVTMEAN_m0.5.nc',chunks=chunksNOHALO),
+			'1':xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_'+CHOIX+'_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)}	
+	Nc,figsize = 3,(12,6)
+	
+	ABLH = 600 	# m, ABLH of S1
+	normX = 4 	# km		
+	
+	indx = nearest(X.values,atX*1000)
+	# variables are the same, only the way turbulent structures are detetected is different
+	U,Um = data['1'].UT,dsmean.Um
+	W,Wm = data['1'].WT,dsmean.Wm
+	THTV,THTVm = Compute_THTV(data['1'].THT,data['1'].RVT),dsmean.THTvm
+	
+	u_f = U-Um
+	#v_f = V-Vm
+	w_f = W-Wm
+	#E = 0.5 * np.sqrt( u_f**2 + v_f**2 + w_f**2) + dsO_i.TKET
+	#Em = dsmean.Em
+	thtv_f = THTV-THTVm
+	uw = u_f*w_f
+	wthtv = w_f*thtv_f
+	uw_mean = dsflx.FLX_UW #- dsflx.FLX_UW_s # uw_mean_tot = dsflx.FLX_UW
+	wthtv_mean = dsflx.FLX_THvW
+	#Iturb = np.sqrt(2/3*E) / np.sqrt(Um**2+Vm**2+Wm**2)
+	
+	
+	indnormX = nearest(X.values,normX*1000)
+	u_star = dsmean.u_star[indnormX].values
+	Qv0 = dsmean.Qv_star[indnormX].values
+	indzi = nearest(Z.values,1.1*ABLH)
+	
+	""" 0) """ # YZ plots, TBD
+	for strm in data.keys():
+		m = float(strm)
+						
+	# profiles of fluxes
+	if '1' in L_choice:
+		print('profiles of uw and wthtv at X='+str(atX)+'km')
+		fig1, ax1 = plt.subplots(1,Nc,figsize = figsize,constrained_layout=True,dpi=dpi)
+		fig2, ax2 = plt.subplots(1,Nc,figsize = figsize,constrained_layout=True,dpi=dpi)
+		for k,strm in enumerate(data.keys()):
+			print('	m='+strm)
+			ds = data[strm]
+			m = float(strm)
+			obj = ds.global_objects
+			is_up = xr.where(obj==1,1,0)
+			is_sub = xr.where(obj==2,1,0)
+			is_down = xr.where(obj==3,1,0)
+			is_env = xr.where(obj==4,1,0)
+			uw_up_p,uw_sub_p,uw_down_p,uw_env_p = compute_flx_contrib(uw,[is_up,is_sub,is_down,is_env],meanDim=['time','nj'])
+			flx_summ = (uw_up_p + uw_sub_p + uw_down_p + uw_env_p ).isel(ni=indx)
+			wthtv_up_p,wthtv_sub_p,wthtv_down_p,wthtv_env_p = compute_flx_contrib(wthtv,[is_up,is_sub,is_down,is_env],meanDim=['time','nj'])	
+			flx_summ_wthtv = (wthtv_up_p + wthtv_sub_p + wthtv_down_p + wthtv_env_p ).isel(ni=indx)
+			if TURB_COND=='C10':
+				is_up2 = xr.where(obj==5,1,0)
+				is_sub2 = xr.where(obj==6,1,0)
+				uw_up_p2,uw_sub_p2 = compute_flx_contrib(uw,[is_up2,is_sub2],meanDim=['time','nj'])
+				flx_summ = flx_summ + ( uw_up_p2 + uw_sub_p2 ).isel(ni=indx)
+				flx_part_up2 	= mean_vertical_contrib((uw_up_p2).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
+				flx_part_sub2 	= mean_vertical_contrib((uw_sub_p2).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
+				wthtv_up_p2,wthtv_sub_p2 = compute_flx_contrib(wthtv,[is_up2,is_sub2],meanDim=['time','nj'])
+				flx_summ_wthtv = (wthtv_up_p2 + wthtv_sub_p2 ).isel(ni=indx)	
+				flx_part_up2 	= mean_vertical_contrib((wthtv_up_p2).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
+				flx_part_sub2 	= mean_vertical_contrib((wthtv_sub_p2).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
+			# uw
+			norm = u_star**2
+			flx_part_up 	= mean_vertical_contrib((uw_up_p).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
+			flx_part_sub 	= mean_vertical_contrib((uw_sub_p).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
+			flx_part_down 	= mean_vertical_contrib((uw_down_p).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
+			flx_part_env 	= mean_vertical_contrib((uw_env_p).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
+			flx_obj_over_all = mean_vertical_contrib(flx_summ,(uw_mean).isel(ni=indx),indzi).values
+			# -> plot
+			ax1[k].plot( uw_up_p[:,indx]/norm,Z/ABLH	,c='red'	,label='updrafts ('		+str(np.round(flx_part_up*100,1))	+'%)')
+			ax1[k].plot( uw_sub_p[:,indx]/norm,Z/ABLH	,c='purple'	,label='sub. shells ('	+str(np.round(flx_part_sub*100,1))	+'%)')
+			ax1[k].plot( uw_down_p[:,indx]/norm,Z/ABLH,c='green'	,label='downdrafts ('	+str(np.round(flx_part_down*100,1))	+'%)')
+			ax1[k].plot( uw_env_p[:,indx]/norm,Z/ABLH	,c='grey'	,label='env ('			+str(np.round(flx_part_env*100,1))	+'%)')
+			if TURB_COND=='C10':
+				ax1[k].plot( uw_up_p2[:,indx]/norm,Z/ABLH	,c='orange'	,label='updrafts2 ('		+str(np.round(flx_part_up2*100,1))	+'%)')
+				ax1[k].plot( uw_sub_p2[:,indx]/norm,Z/ABLH	,c='pink'	,label='sub. shells2 ('	+str(np.round(flx_part_sub2*100,1))	+'%)')
+			ax1[k].plot( flx_summ[:]/norm,Z/ABLH		,c='k'		,label='all ('			+str(np.round(flx_obj_over_all*100,1))+'%)')
+			ax1[k].plot( uw_mean[:,indx]/norm,Z/ABLH	,c='k'		,label='mean',ls='--')
+			ax1[k].set_xlabel(r"$<\~ u \~ w>$/u*²")
+			ax1[k].set_ylim([0,1.2])
+			ax1[k].set_xlim([-1.5,0.3])
+			ax1[k].grid()
+			ax1[k].set_title('m='+strm,loc='right')
+			# wthv
+			norm = Qv0			
+			flx_part_up 	= mean_vertical_contrib((wthtv_up_p).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
+			flx_part_sub 	= mean_vertical_contrib((wthtv_sub_p).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
+			flx_part_down 	= mean_vertical_contrib((wthtv_down_p).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
+			flx_part_env 	= mean_vertical_contrib((wthtv_env_p).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
+			flx_obj_over_all = mean_vertical_contrib(flx_summ_wthtv,(wthtv_mean).isel(ni=indx),indzi).values
+			# -> plot
+			ax2[k].plot( wthtv_up_p[:,indx]/norm,Z/ABLH	,c='red'	,label='updrafts ('		+str(np.round(flx_part_up*100,1))	+'%)')
+			ax2[k].plot( wthtv_sub_p[:,indx]/norm,Z/ABLH	,c='purple'	,label='sub. shells ('	+str(np.round(flx_part_sub*100,1))	+'%)')
+			ax2[k].plot( wthtv_down_p[:,indx]/norm,Z/ABLH	,c='green'	,label='downdrafts ('	+str(np.round(flx_part_down*100,1))	+'%)')
+			ax2[k].plot( wthtv_env_p[:,indx]/norm,Z/ABLH	,c='grey'	,label='env ('			+str(np.round(flx_part_env*100,1))	+'%)')
+			if TURB_COND=='C10':
+				ax2[k].plot( wthtv_up_p2[:,indx]/norm,Z/ABLH	,c='orange'	,label='updrafts2 ('		+str(np.round(flx_part_up*100,1))	+'%)')
+				ax2[k].plot( wthtv_sub_p2[:,indx]/norm,Z/ABLH	,c='pink'	,label='sub. shells2 ('	+str(np.round(flx_part_sub*100,1))	+'%)')
+			ax2[k].plot( flx_summ_wthtv[:]/norm,Z/ABLH		,c='k'		,label='all ('			+str(np.round(flx_obj_over_all*100,1))+'%)')
+			ax2[k].plot( wthtv_mean[:,indx]/norm,Z/ABLH		,c='k'		,label='mean',ls='--')
+			ax2[k].set_title('m='+strm,loc='right')
+			ax2[k].set_xlabel(r"$<\~ w \~ \theta_v>$/$Q_v^*$")
+			ax2[k].set_ylim([0,1.2])
+			ax2[k].set_xlim([-1.1,3.5])
+			ax2[k].grid()
+			ax1[k].legend(loc='upper left')
+			ax2[k].legend(loc='upper right')
+		ax1[0].set_ylabel('z / <zi>x')
+		ax2[0].set_ylabel('z / <zi>x')
+		fig1.savefig(path_save+'turbulent_fluxes_uw_x'+str(atX)+'km.png')
+		fig2.savefig(path_save+'turbulent_fluxes_wthtv_x'+str(atX)+'km.png')
+				
+	if '2' in L_choice:
+		print('profiles of uw and wthtv at X='+str(atX)+'km, with tophat decomposition for up/down/other')
+		color = {'up':'red',
+				'down':'green',
+				'other':'blue'}
+				
+		# linestyles is same length as number of m tested
+		if TURB_COND=='ITURB3':
+			# ls = ['-','--',(5, (10, 3)),'-.',':',] if 5 values of m
+			ls = ['-','--','dotted'] # if 3 values of m
+		elif TURB_COND=='C10':
+			ls = ['dotted','--','-'] 	
+		
+		# uw
+		fig, ax = plt.subplots(1,2,figsize = (7,5),constrained_layout=True,dpi=dpi)
+		N = len(data.keys())
+		for k,strm in enumerate(data.keys()):
+			print('	m='+strm)
+			ds = data[strm]
+			m = float(strm)
+			obj = ds.global_objects
+			is_up = xr.where(obj==1,1,0)
+			is_sub = xr.where(obj==2,1,0)
+			is_down = xr.where(obj==3,1,0)
+			is_env = xr.where(obj==4,1,0)
+			if TURB_COND=='C10':
+				is_up = np.logical_or( xr.where(obj==1,1,0),xr.where(obj==5,1,0) )
+			norm = u_star**2
+			is_other = np.logical_not( np.logical_or(is_up,is_down) )
+			d_str = {'up':is_up,'down':is_down,'other':is_other}
+			# splitting into top hat and intra variability
+			TopH,Intra = {},{}
+			summ= xr.zeros_like(uw_mean)
+			for structure in d_str.keys():
+				Ui = U.where(d_str[structure]==1).mean(dim=['time','nj'])
+				Wi = W.where(d_str[structure]==1).mean(dim=['time','nj'])
+				alphai = d_str[structure].mean(dim=['time','nj']) 
+				TopH[structure] = alphai * (Ui-Um)*Wi
+				Intra[structure] = alphai * ( (U-Ui)*(W-Wi) ).where(d_str[structure]==1).mean(dim=['time','nj'])
+				summ = summ + TopH[structure] + Intra[structure]
+			for structure in d_str.keys():
+				if m==1:
+					ax[0].plot( TopH[structure][:,indx]/u_star**2,Z/ABLH,c=color[structure] ,ls=ls[k],label=structure)
+				else:
+					ax[0].plot( TopH[structure][:,indx]/u_star**2,Z/ABLH,c=color[structure] ,ls=ls[k])
+				ax[1].plot( Intra[structure][:,indx]/u_star**2,Z/ABLH,c=color[structure] ,ls=ls[k])
+		ax[0].plot(uw_mean[:,indx]/u_star**2,Z/ABLH,c='k',label='mean')
+		ax[1].plot(uw_mean[:,indx]/u_star**2,Z/ABLH,c='k',label='mean')	
+		ax[0].set_title('Top-hat')
+		ax[1].set_title('Intra-variability')
+		ax[0].set_xlabel(r"$<\~ u \~ w>$/u*²")
+		ax[1].set_xlabel(r"$<\~ u \~ w>$/u*²")
+		ax[0].set_ylabel(r'z/z$_i$')
+		ax[0].legend()
+		for axe in ax:
+			axe.set_ylim([0,1.2])
+			axe.set_xlim([-1.5,0.3])
+			axe.xaxis.set_major_locator(MultipleLocator(0.5))
+			axe.grid()
+			axe.xaxis.label.set_fontsize(13)
+			axe.yaxis.label.set_fontsize(13)
+		# saving	
+		fig.savefig(path_save+'turbulent_fluxes_uw_x'+str(atX)+'km_tophat.png')
+
+		# wthtv
+		fig, ax = plt.subplots(1,2,figsize = (7,5),constrained_layout=True,dpi=dpi)
+		N = len(data.keys())
+		for k,strm in enumerate(data.keys()):
+			print('	m='+strm)
+			ds = data[strm]
+			m = float(strm)
+			obj = ds.global_objects
+			is_up = xr.where(obj==1,1,0)
+			is_sub = xr.where(obj==2,1,0)
+			is_down = xr.where(obj==3,1,0)
+			is_env = xr.where(obj==4,1,0)
+			if TURB_COND=='C10':
+				is_up = np.logical_or( xr.where(obj==1,1,0),xr.where(obj==5,1,0) )
+			norm = Qv0
+			is_other = np.logical_not( np.logical_or(is_up,is_down) )
+			d_str = {'up':is_up,'down':is_down,'other':is_other}
+			# splitting into top hat and intra variability
+			TopH,Intra = {},{}
+			summ= xr.zeros_like(uw_mean)
+			for structure in d_str.keys():
+				THTVi = THTV.where(d_str[structure]==1).mean(dim=['time','nj'])
+				Wi = W.where(d_str[structure]==1).mean(dim=['time','nj'])
+				alphai = d_str[structure].mean(dim=['time','nj']) 
+				TopH[structure] = alphai * (THTVi-THTVm)*Wi
+				Intra[structure] = alphai * ( (THTV-THTVi)*(W-Wi) ).where(d_str[structure]==1).mean(dim=['time','nj'])
+				summ = summ + TopH[structure] + Intra[structure]
+			for structure in d_str.keys():
+				if m==1:
+					ax[0].plot( TopH[structure][:,indx]/norm,Z/ABLH,c=color[structure] ,ls=ls[k],label=structure)
+				else:
+					ax[0].plot( TopH[structure][:,indx]/norm,Z/ABLH,c=color[structure] ,ls=ls[k])
+				ax[1].plot( Intra[structure][:,indx]/norm,Z/ABLH,c=color[structure] ,ls=ls[k])
+		ax[0].plot(wthtv_mean[:,indx]/norm,Z/ABLH,c='k',label='mean')
+		ax[1].plot(wthtv_mean[:,indx]/norm,Z/ABLH,c='k',label='mean')	
+		ax[0].set_title('Top-hat')
+		ax[1].set_title('Intra-variability')
+		ax[0].set_xlabel(r"$<\~ w \~ \theta_v>$/$Q_v^*$")
+		ax[1].set_xlabel(r"$<\~ w \~ \theta_v>$/$Q_v^*$")
+		ax[0].set_ylabel(r'z/z$_i$')
+		ax[0].legend()
+		for axe in ax:
+			axe.set_ylim([0,1.2])
+			axe.set_xlim([-0.8,3.5])
+			axe.xaxis.set_major_locator(MultipleLocator(0.5))
+			axe.grid()
+			axe.xaxis.label.set_fontsize(13)
+			axe.yaxis.label.set_fontsize(13)
+		# saving	
+		fig.savefig(path_save+'turbulent_fluxes_wthtv_x'+str(atX)+'km_tophat.png')
+		
+	if '3' in L_choice:
+		print('profiles of objet covers')
+		fig1, ax1 = plt.subplots(1,Nc,figsize = figsize,constrained_layout=True,dpi=dpi)
+		for k,strm in enumerate(data.keys()):
+			print('	m='+strm)
+			ds = data[strm]
+			m = float(strm)
+			obj = ds.global_objects
+			is_up = xr.where(obj==1,1,0)
+			is_sub = xr.where(obj==2,1,0)
+			is_down = xr.where(obj==3,1,0)
+			is_env = xr.where(obj==4,1,0)
+			F_up = is_up.mean(dim=['time','nj']) 
+			F_sub = is_sub.mean(dim=['time','nj']) 
+			F_down = is_down.mean(dim=['time','nj'])  
+			F_env = is_env.mean(dim=['time','nj']) 
+			summ = F_up+F_sub+F_down+F_env
+			if TURB_COND=='C10':
+				is_up2 = xr.where(obj==5,1,0)
+				is_sub2 = xr.where(obj==6,1,0)
+				F_up2 = is_up2.mean(dim=['time','nj']) 
+				F_sub2 = is_sub2.mean(dim=['time','nj']) 
+				summ = summ + F_up2+F_sub2
+			ax1[k].plot( F_up[:,indx],Z/ABLH	,c='red',label='updrafts')
+			ax1[k].plot( F_sub[:,indx],Z/ABLH	,c='purple',label='sub. shells')
+			ax1[k].plot( F_down[:,indx],Z/ABLH	,c='green',label='downdrafts')
+			ax1[k].plot( F_env[:,indx],Z/ABLH	,c='grey',label='env')
+			if TURB_COND=='C10':
+				ax1[k].plot( F_up2[:,indx],Z/ABLH	,c='orange',label='updrafts2')
+				ax1[k].plot( F_sub2[:,indx],Z/ABLH	,c='pink',label='sub. shells2')
+			ax1[k].plot( summ[:,indx],Z/ABLH	,c='k',label='total of obj')
+			ax1[k].set_ylim([0,1.2])
+			ax1[k].grid()
+			ax1[k].set_title('m='+strm,loc='right')
+		ax1[0].set_ylabel('z/zi')
+		ax1[0].legend()
+		fig1.savefig(path_save+'cover_x'+str(atX)+'km.png')
+
+def updraft_charateristics(X,Z,dsCS1,dsmean,dsCS1warm,dsCS1cold,dataSST,crit_value,Tstart,Tstop,window,BLIM,L_atX,K,path_saving,dpi):
+	"""Plots buoyancy, w' and u' inside updrafts from the conditionaly sampled updraft by C10.
+		
+		INPUTS:
+			- X: X dimension
+			- Z: Z dimension
+			- dsCS1: custom built file with masks for each coherent structures
+			- dsmean: custom built file with mean profiles for prog. variables
+			- dsCS1warm: custom built file with masks for each coherent structures (warm ref)
+			- dsCS1cold: custom built file with masks for each coherent structures (cold ref)
+			- dataSST: 1D sst
+			- crit_value: threshold to differentiate 'cold' SST from 'warm' SST
+			- Tstart: time index of first file for meanTurb
+			- Tstop: time index of last file for meanTurb
+			- window: window for meanTurb
+			- BLIM: buoyancy limits
+			- L_atX: liste of X positions (km)
+			- K: plot profile only if area > K, (5/100)
+			- path_saving: where to save the figure
+			- dpi: dot per inches
+		OUTPUTS:
+			- a plot with conditional characteristics of updrafts: buoyancy, vertical velocity and zonal velocity
+		
+	"""
+	indt = -1 # last time for ref files
+	path_save2 = path_saving+'C10_m'+str(dsCS1.attrs['mCS'])+'_g'+str(dsCS1.attrs['gammaRv']*100) + '_SVT/S1/'
+	if not os.path.isdir(path_save2): # creat folder if it doesnt exist
+		os.makedirs(path_save2)
+	
+	cmap_warm ='Reds'
+	cmap_cold ='winter'
+	colorsX = DISCRETIZED_2CMAP_2(cmap_cold,cmap_warm,L_atX*1000,dataSST,crit_value,X.values)	
+	
+	L_indx = []
+	for x in L_atX:
+		L_indx.append(nearest(X.values,x*1000))		
+	
+	# Variables
+	is_up = xr.where(dsCS1.global_objects==1,1,0)	
+	is_up_refW = xr.where(dsCS1warm.global_objects==1,1,0)	
+	is_up_refC = xr.where(dsCS1cold.global_objects==1,1,0)
+	is_up = np.logical_or(is_up,xr.where(dsCS1.global_objects==5,1,0))
+	F_up = MeanTurb(is_up,Tstart,Tstop,window)
+	F_up_warm = is_up_refW.mean(dim=['ni','nj'])
+	F_up_cold = is_up_refC.mean(dim=['ni','nj'])
+	# BUOYANCY
+	# -> S1
+	THTV = Compute_THTV(dsCS1.THT,dsCS1.RVT)
+	THTV_up = MeanTurb(THTV.where(is_up==True),Tstart,Tstop,window)
+	THTV_ref = MeanTurb(THTV,Tstart,Tstop,window)
+	B = g*(THTV_up/THTV_ref - 1)
+	# -> warm ref
+	THTV_warm = Compute_THTV(dsCS1warm.THT,dsCS1warm.RVT)
+	THTV_up_warm = THTV_warm.where(is_up_refW==1).mean(dim=['ni','nj'])
+	THTV_ref_warm = THTV_warm.mean(dim=['ni','nj'])
+	ABLH_warm = Z[THTV_warm.mean(dim=['ni','nj']).differentiate('level').argmax().values].values
+	B_warm = g*(THTV_up_warm/THTV_ref_warm - 1)
+	# -> cold ref
+	THTV_cold = Compute_THTV(dsCS1cold.THT,dsCS1cold.RVT)
+	THTV_up_cold = THTV_cold.where(is_up_refC==1).mean(dim=['ni','nj'])
+	THTV_ref_cold = THTV_cold.mean(dim=['ni','nj'])
+	ABLH_cold = Z[THTV_cold.mean(dim=['ni','nj']).differentiate('level').argmax().values].values
+	B_cold = g*(THTV_up_cold/THTV_ref_cold - 1)
+	# FLUCTUATIONS in updrafts
+	# -> S1
+	W_up = MeanTurb( (dsCS1.WT-dsmean.Wm).where(is_up), Tstart,Tstop,window)
+	U_up = MeanTurb( (dsCS1.UT-dsmean.Um).where(is_up), Tstart,Tstop,window)
+	# -> warm ref
+	W_up_w = (dsCS1warm.WT-dsCS1warm.WT.mean(['ni','nj'])).where(is_up_refW).mean(dim=['ni','nj'])
+	U_up_w = (dsCS1warm.UT-dsCS1warm.UT.mean(['ni','nj'])).where(is_up_refW).mean(dim=['ni','nj'])
+	# -> cold ref
+	W_up_c = (dsCS1cold.WT-dsCS1cold.WT.mean(['ni','nj'])).where(is_up_refC).mean(dim=['ni','nj'])
+	U_up_c = (dsCS1cold.UT-dsCS1cold.UT.mean(['ni','nj'])).where(is_up_refC).mean(dim=['ni','nj'])
+	
+	# PLOT
+	fig, ax = plt.subplots(1,3,figsize = (10,5),constrained_layout=True,dpi=dpi)	
+	# -> Buoyancy 
+	ax[0].vlines(0,0,3,colors='grey',alpha=0.5)
+	ax[0].plot(np.ma.masked_where(F_up_cold<=K,B_cold)*1000,Z/ABLH_cold,c='blue',label='ref: cold',ls='--')
+	ax[0].plot(np.ma.masked_where(F_up_warm<=K,B_warm)*1000,Z/ABLH_warm,c='red',label='ref: warm',ls='--')
+	for kx,indx in enumerate(L_indx):
+		ax[0].plot(np.ma.masked_where(F_up.isel(ni=indx)<=K,B.isel(ni=indx))*1000,Z/ABLH_S1,c=colorsX[kx],label='X='+str(L_atX[kx])+'km')
+	ax[0].legend()
+	#ax[0].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+	#ax[0].xaxis.major.formatter._useMathText = True
+	ax[0].set_ylabel(r'z/z$_i$')
+	ax[0].set_xlabel(r'g.(<$\theta_v$>$_{up}$/$<\theta_v>$-1)') # (10$^{-3}$ m.s$^{-2}$)
+	ax[0].set_xlim(BLIM)
+	# -> W
+	ax[1].plot( np.ma.masked_where(F_up_warm<=K,W_up_w),Z/ABLH_warm,c='r',label='ref: warm',ls='--')
+	ax[1].plot( np.ma.masked_where(F_up_cold<=K,W_up_c),Z/ABLH_cold,c='b',label='ref: cold',ls='--')
+	for kx,indx in enumerate(L_indx):
+		ax[1].plot( np.ma.masked_where(F_up.isel(ni=indx)<=K,W_up.isel(ni=indx)), Z/ABLH_S1,c=colorsX[kx],label='S1 x='+str(L_atX[kx])+'km')
+	ax[1].set_xlabel(r"$\~w_{up}$") #  (m.s$^{-1}$)
+	ax[1].set_xlim([-0.05,0.75])
+	#ax[1].tick_params(axis='both',labelleft=False)
+	# -> U
+	ax[2].plot( np.ma.masked_where(F_up_warm<=K,U_up_w),Z/ABLH_warm,c='r',label='ref: warm',ls='--')
+	ax[2].plot( np.ma.masked_where(F_up_cold<=K,U_up_c),Z/ABLH_cold,c='b',label='ref: cold',ls='--')
+	for kx,indx in enumerate(L_indx):
+		ax[2].plot( np.ma.masked_where(F_up.isel(ni=indx)<=K,U_up.isel(ni=indx)), Z/ABLH_S1,c=colorsX[kx],label='S1 x='+str(L_atX[kx])+'km')
+	ax[2].set_xlabel(r"$\~u_{up}$") #  (m.s$^{-1}$)
+	ax[2].set_xlim([-0.75,0.05])
+	#ax[2].tick_params(axis='both',labelleft=False)
+	
+	for axe in ax.flatten():
+		axe.set_ylim([0,1.2])
+		axe.grid()	
+		axe.xaxis.label.set_fontsize(13)
+		axe.yaxis.label.set_fontsize(13)
+		
+	fig.savefig(path_save2+'Updrafts_characteristics.png')
+
+# End IN paper ----------------------
+
+
 def plot_quadrants(X,Y,Z,X1,L_plots,L_dsmean,L_ds,L_dsquadrant,L_string_var,L_filter,L_paramSlice,path_save,dpi):
 	"""Quadrant analysis of turbulent flux a'b'.
 		Every files from L_dsquadrant is scanned and plots are files specifics (no comparison)
@@ -341,78 +1576,6 @@ def plot_quadrants(X,Y,Z,X1,L_plots,L_dsmean,L_ds,L_dsquadrant,L_string_var,L_fi
 			ax.set_title(CFILTER_title[1:])
 			fig.savefig(path_save+'profile_quadrants_efficiency_'+string_var+'_'+str(X1)+'km.png')
 
-
-def plot_uw_efficiencies_atX(X,Z,Tstart,Tstop,window,crit_value,dsflx,L_dsquadrant,dsref,L_atX,dataSST,zimax,path_save,dpi):
-	"""
-	This procedure plots the momentum efficiency as defined in Salesky et al. "On the Nature of the Transition Between Roll and Cellular Organization in the Convective Boundary Layer".
-	The plots shows the profiles of efficiency at some X for S1 and the reference profiles.
-	
-	INPUTS:
-		- X 		: X direction dataArray
-		- Z 		: Z direction dataArray
-		- Tsart 	: for MeanTurb, index for 1rst instant
-		- Tstop, 	: for MeanTurb, index for last instant
-		- window 	: for MeanTurb, index window for 1D filter
-		- crit_value	: threshold of SST to change colormap in 'DISCRETIZED_2CMAP_2'
-		- dsflx 	: dataset with the total and resolved fluxes for S1
-		- L_dsquadrant 	: dictionnary with quadrant dataset for S1 and ref sim
-		- dsref 	: dataset with reference sim values
-		- L_atX 	: liste of X position to plot profiles of S1 at
-		- dataSST 	: 1D SST jump
-		- zimax	: altitude max to plot profiles (in z/zi)
-		- path_save 	: where to save figures
-		- dpi 		: for figures
-	
-	"""
-	indt = -1 # for last instant for ref sim
-	n_uw = {}
-	dic_ABLH = {}
-	# computing efficiencies
-	for case in L_dsquadrant.keys():
-		uw_1 = L_dsquadrant[case]['uw_1']
-		uw_2 = L_dsquadrant[case]['uw_2']
-		uw_3 = L_dsquadrant[case]['uw_3']
-		uw_4 = L_dsquadrant[case]['uw_4']
-		uw_r = uw_1 + uw_2 + uw_3 + uw_4
-		if case in ['warm','cold']:	
-			gTHTV = ( dsref[case]['nomean']['Mean']['MEAN_TH']
-				* (1+1.61*dsref[case]['nomean']['Mean']['MEAN_RV'])
-				/ (1+dsref[case]['nomean']['Mean']['MEAN_RV']) )[indt].differentiate('level_les')
-			dic_ABLH[case] = Z[gTHTV.argmax('level_les').values].values
-			uw_sgs = dsref[case]['nomean']['Subgrid']['SBG_WU'][indt,:]
-			uw_2 = uw_2[0,:,:,:].mean(dim={'ni','nj'})
-			uw_4 = uw_4[0,:,:,:].mean(dim={'ni','nj'})
-			uw_r = uw_r[0,:,:,:].mean(dim={'ni','nj'})
-			uw   = (uw_sgs + uw_r).values	
-		elif case=='S1':	
-			uw_2 = MeanTurb(uw_2,Tstart,Tstop,window)
-			uw_4 = MeanTurb(uw_4,Tstart,Tstop,window)
-			uw_r = MeanTurb(uw_r,Tstart,Tstop,window)
-			uw   = dsflx.FLX_UW
-			dic_ABLH['S1'] = ABLH_S1	
-		n_uw[case] = uw_r / (uw_2+uw_4)	
-	# building a nice colormap
-	cmap_warm ='Reds'
-	cmap_cold ='winter' 
-	colorsX = DISCRETIZED_2CMAP_2(cmap_cold,cmap_warm,L_atX*1000,dataSST,crit_value,X.values)	
-	# plot
-	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
-	ax.plot(n_uw['cold'],Z/dic_ABLH['cold'],color='blue',label='cold',ls='--')
-	ax.plot(n_uw['warm'],Z/dic_ABLH['warm'],color='red',label='warm',ls='--')
-	for k,X1 in enumerate(L_atX):
-		indx = nearest(X.values,X1*1000)
-		ax.plot( n_uw['S1'].isel(ni=indx), Z/dic_ABLH['S1'],color=colorsX[k],label='S1 at X='+str(X1)+'km')
-	ax.set_ylabel('z/zi')
-	ax.set_xlim([0.0,1])
-	ax.set_ylim([0,zimax])
-	ax.xaxis.label.set_fontsize(13)
-	ax.yaxis.label.set_fontsize(13)
-	ax.set_xlabel(r" <$\~u \~w$> / <$\~u\~w_{II} + \~u\~w_{IV}$>")
-	ax.legend() 
-	ax.grid()
-	fig.savefig(path_save+'efficiency_uw.png')
-
-
 def plot_wthtv_efficiencies_atX(X,Z,Tstart,Tstop,window,crit_value,dsflx,L_dsquadrant,dsref,L_atX,dataSST,zimax,path_save,dpi):
 	"""
 	This procedure plots the buoyancy efficiency as defined in Salesky et al. "On the Nature of the Transition Between Roll and Cellular Organization in the Convective Boundary Layer".
@@ -482,117 +1645,6 @@ def plot_wthtv_efficiencies_atX(X,Z,Tstart,Tstop,window,crit_value,dsflx,L_dsqua
 	ax.legend() 
 	ax.grid()
 	fig.savefig(path_save+'efficiency_'+tracer+'.png')
-
-def plot_JPDF(X,Y,Z,X1,L_dsmean,L_ds,L_dsquadrant,case,string_flx,string_obj,indt,L_atzi,dpi):
-	"""
-	This procedure is plotting the JPDF of two variable
-	
-	
-	INPUT:
-		- X 			: DataArray containing X dimension
-	 	- Y  			: DataArray containing Y dimension
-	 	- Z  			: DataArray containing Z dimension
-	 	- X1 			: X location (in km) to plot profiles of S1 simulation
-	 	- L_dsmean 		: dic of mean files with name of simu as key
-	 	- L_ds 			: dic of instantaneous file with name of simu as key
-	 	- L_dsquadrant 	: dic of quadrant splitting file with name of simu as key
-		- case 			: 'warm' or 'cold' or 'S1'
-		- string_flx 	: what to plot : u' and w' or thtv' and w'
-		- string_obj 	: flux on which the decomposition is done, 'wthtv' or 'uw'.
-							can be '' and so in this case no decomposition is done.
-		- indt			: time index
-		- L_atzi 		: list of float, fraction of zi at which to plot the JPDF
-		- dpi 			: for plot
-	"""
-	
-	
-
-	# -> Mean values and ABLH
-	if '000' in L_dsmean[case]: # MNH diachronic file
-		ABLH = L_dsmean[case]['nomean']['Misc']['BL_H'][indt].values
-		Utm = L_dsmean[case]['nomean']['Mean']['MEAN_U'][indt,:]
-		THTVtm = L_dsmean[case]['nomean']['Mean']['MEAN_THV'][indt,:]
-		u_star = L_dsmean[case]['nomean']['Surface']['Ustar'][indt].values
-		Utm = Utm.rename(new_name_or_name_dict={'level_les':'level'})
-		THTVtm = THTVtm.rename(new_name_or_name_dict={'level_les':'level'})
-#			E0 	= L_ds[case]['RCONSW_FLX'].interp({'level_w':L_ds[case].level})[0,nhalo,nhalo:-nhalo,nhalo:-nhalo].mean().values
-#			Q0	= L_ds[case]['THW_FLX'][0,nhalo,nhalo:-nhalo,nhalo:-nhalo].mean().values
-#			THT_z0 	= L_ds[case]['THT'][0,nhalo,nhalo:-nhalo,nhalo:-nhalo].mean().values
-#			RV_z0 	= L_ds[case]['RVT'][0,nhalo,nhalo:-nhalo,nhalo:-nhalo].mean().values
-#			THTv_z0	= THT_z0*(1+1.61*RV_z0)/(1+RV_z0)
-#			Qv0	= THTv_z0/THT_z0*Q0+0.61*THT_z0*E0
-		#title=case
-	else: # hand built mean file
-		THTVtm = L_dsmean[case].THTvm[:,:]
-		Utm = L_dsmean[case].Um[:,:]
-		#Vm = L_dsmean[case].Vm[:,:]
-		gTHT = THTVtm[:,:].differentiate('level')
-		ABLH = Z[gTHT.argmax(dim='level')]
-		ABLH = ABLH.mean().values
-		u_star = L_dsmean[case].u_star[indX_norm].values
-#			E0 	= L_dsmean[case].E0[indX_norm]
-#			Q0 	= L_dsmean[case].Q_star[indX_norm]
-#			Qv0	= L_dsmean[case].Qv_star[indX_norm]
-		title=case+' at X='+str(X1)+'km'
-
-	fig, ax = plt.subplots(1,len(L_atzi),figsize = (15,5), constrained_layout=True	,dpi=dpi)
-	for k,atzi in enumerate(L_atzi):
-		print('z/zi='+str(atzi))
-		indz = nearest(Z.values,atzi*ABLH)
-		Um,THTVm = Utm[indz],THTVtm[indz]
-		
-		# Instantaneous field
-		U = L_ds[case].UT.interp({'ni_u':L_ds[case].ni})[indt,indz,nhalo:-nhalo,nhalo:-nhalo] 	# grid : 2
-		U = U.rename(new_name_or_name_dict={'nj_u':'nj'})
-		W = L_ds[case].WT.interp({'level_w':L_ds[case].level})[indt,indz,nhalo:-nhalo,nhalo:-nhalo]
-		THT = L_ds[case].THT[indt,indz,nhalo:-nhalo,nhalo:-nhalo]
-		RVT = L_ds[case].RVT[indt,indz,nhalo:-nhalo,nhalo:-nhalo]
-		THTV = THT*(1+Rv/Rd*RVT)/(1+RVT)
-		Um,THTVm = Complete_dim_like([Um,THTVm],U)
-		# what flux is plotted
-		if string_flx=='uw':
-			a,b = W,U-Um
-			nameA,nameB = "w'","u'"
-			xlim,ylim = [-1,1],[-1,1]
-		elif string_flx=='wthtv':
-			a,b = W, THTV-THTVm
-			nameA,nameB = "w'","thtv'"
-			xlim,ylim = [-1,1],[-0.2,0.2]
-		a_f = np.ravel(a.values)
-		b_f = np.ravel(b.values)
-		# how quadrants are shown depends on physical meaning of flux
-		if string_obj=='uw':
-			colors = ['blue','red','black','green']
-		elif string_obj=='wthtv':
-			colors = ['red','black','green','blue']
-		if string_obj!='':
-			quad_info = (xr.where( L_dsquadrant[case][string_obj+'_1'][indt,indz] > 0, 1,0) +
-				xr.where( L_dsquadrant[case][string_obj+'_2'][indt,indz] < 0, 2,0) +
-				xr.where( L_dsquadrant[case][string_obj+'_3'][indt,indz] > 0, 3,0) +
-				xr.where( L_dsquadrant[case][string_obj+'_4'][indt,indz] < 0, 4,0) )
-			quad_info_f = np.ravel(quad_info.values)
-		else:	
-			quad_info_f = np.zeros(a_f.shape)
-
-		ab_f = a_f*b_f
-		d = {string_flx:ab_f,nameA:a_f,nameB:b_f,"quadrant":quad_info_f}
-		data = pd.DataFrame(data=d)
-		ax[k].vlines(0,ylim[0],ylim[-1],colors='grey')
-		ax[k].hlines(0,xlim[0],xlim[-1],colors='grey')
-		levels = [0.1,0.5,0.9]
-		if string_obj=='':
-			sns.kdeplot(ax=ax[k],data=data, x=nameA, y=nameB,color='k',levels=levels)
-			#ax.get_legend().set_title("quadrant")
-		else:
-			sns.kdeplot(ax=ax[k],data=data, x=nameA, y=nameB,color='grey',levels=levels,linestyles='--')
-			sns.kdeplot(ax=ax[k],data=data, x=nameA, y=nameB,hue='quadrant',levels=levels,palette=colors)
-			ax[k].get_legend().set_title("quadrant("+string_obj+')')
-		
-		ax[k].set_ylim(ylim)
-		ax[k].set_xlim(xlim)
-		ax[k].set_title("JPDF of "+nameA+" and "+nameB+" at z/zi="+str(atzi))
-	
-
 
 def plots_ref_CS1(X,Y,Z,dsCS1,dsref,K,atzi,aty,atx,SEUIL_ML,SVT_type,indt,L_case,L_var,L_plot,path_save,dpi):
 	"""	
@@ -1228,126 +2280,6 @@ def plots_ref_CS1(X,Y,Z,dsCS1,dsref,K,atzi,aty,atx,SEUIL_ML,SVT_type,indt,L_case
 			print('			 coherent/all =',obj_over_all*100,'%')
 			fig.savefig(path_save2+'CS1_'+case+'_wrv_profiles.png')
 	
-def plots_nice_flx_ref_CS1(Z,dsCS1,dsref,path_save,dpi):
-	""" Nicer plots than 'plots_ref_CS1' for uw and wthtv fluxes
-		2 figure with 2 plots each
-		
-		INPUTS : 
-			- Z : vertical coordinate (without halo)
-			- dsCS1 : dataset with conditional sampling filter, ouput of 'build_CS1' from module_building_files
-			- dsref : 000 MNH file opened with 'Open_LES_MEAN' from module_building_files
-			- path_save : where to save figures
-			- dpi : for the saved figures
-		
-	"""
-	fig, ax = plt.subplots(1,2,figsize = (8,5),constrained_layout=True,dpi=dpi) # uw
-	fig2, ax2 = plt.subplots(1,2,figsize = (8,5),constrained_layout=True,dpi=dpi) # wthtv
-	
-	indt = -1 # t=+3h
-	
-	for i,case in enumerate(['cold','warm']):
-	
-		# Conditional sampling related
-		is_turb = dsCS1[case].is_turb
-		is_up = dsCS1[case].is_up
-		is_sub = dsCS1[case].is_sub
-		is_down = dsCS1[case].is_down
-		is_env = dsCS1[case].is_env
-		global_objects = dsCS1[case].global_objects
-		TURB_COND = dsCS1[case].attrs['Turb_cond']
-		RV_DIFF = dsCS1[case].attrs['RV_DIFF']
-	
-		# Instantaneous fields
-		U,Um = dsCS1[case].UT,dsCS1[case].UTm
-		W,Wm = dsCS1[case].WT,dsCS1[case].WTm
-		THTV,THTVm = dsCS1[case].THTV,dsCS1[case].THTVm
-		thtv_fluc = THTV - THTVm
-		u_fluc = U - Um
-		w_fluc = W - Wm
-		uw = u_fluc*w_fluc
-		wthtv = w_fluc*thtv_fluc
-		uw_mean= uw.mean(dim=['ni','nj']) # mean resolved uw
-		uw_up_p		,uw_sub_p	,uw_down_p	,uw_env_p 	= compute_flx_contrib(uw,[is_up,is_sub,is_down,is_env],meanDim=['ni','nj'])
-		wthtv_mean= wthtv.mean(dim=['ni','nj']) # mean resolved wthtv
-		wthtv_up_p,wthtv_sub_p,wthtv_down_p,wthtv_env_p = compute_flx_contrib(wthtv,[is_up,is_sub,is_down,is_env],meanDim=['ni','nj'])
-		
-		# mean fields
-		THT_case = dsref[case]['nomean']['Mean']['MEAN_TH'][indt,:]
-		THTV_case = dsref[case]['nomean']['Mean']['MEAN_THV'][indt,:]
-		ABLH = Z[THTV_case.differentiate('level_les').argmax().values].values
-		indzi = nearest(Z.values,1.1*ABLH) # looking at 1.1*zi to account for overshoots
-		RES_WTHV_case = dsref[case]['nomean']['Resolved']['RES_WTHV'][indt,:]
-		SBG_WTH_case = dsref[case]['nomean']['Subgrid']['SBG_WTHL'][indt,:]
-		SBG_WRT_case = dsref[case]['nomean']['Subgrid']['SBG_WRT'][indt,:]
-		SBG_WTHV_case = ( THTV_case/THT_case*SBG_WTH_case + 0.61*THT_case*SBG_WRT_case )
-		WTHV_total = RES_WTHV_case + SBG_WTHV_case
-		RES_UW_case = dsref[case]['nomean']['Resolved']['RES_WU'][indt,:]
-		SBG_UW_case = dsref[case]['nomean']['Subgrid']['SBG_WU'][indt,:]
-		UW_total = RES_UW_case + SBG_UW_case
-		# surface values		
-		Qv0 = dsCS1[case]['Qv0'].values
-		u_star = dsCS1[case]['u_star'].values
-		
-		# uw 
-		somme = uw_up_p+uw_sub_p+uw_down_p #  +uw_env_p
-		part_up = mean_vertical_contrib(uw_up_p,uw_mean,indzi).values
-		part_sub = mean_vertical_contrib(uw_sub_p,uw_mean,indzi).values
-		part_down = mean_vertical_contrib(uw_down_p,uw_mean,indzi).values
-		part_env = mean_vertical_contrib(uw_env_p,uw_mean,indzi).values
-		obj_over_all = mean_vertical_contrib(somme,uw_mean,indzi).values
-		ax[i].plot( uw_up_p/u_star**2,Z/ABLH,c='red',label='up ('+str(np.round(part_up*100,1))+'%)')
-		ax[i].plot( uw_sub_p/u_star**2,Z/ABLH,c='purple',label='ss ('+str(np.round(part_sub*100,1))+'%)')
-		ax[i].plot( uw_down_p/u_star**2,Z/ABLH,c='green',label='down ('+str(np.round(part_down*100,1))+'%)')
-		#ax[i].plot( uw_env_p/u_star**2,Z/ABLH,c='grey',label='env ('+str(np.round(part_env*100,1))+'%)')
-		ax[i].plot( somme/u_star**2,Z/ABLH,c='black',label='all ('+str(np.round(obj_over_all*100,1))+'%)')
-		ax[i].plot( UW_total/u_star**2,Z/ABLH,c='k',label='mean',ls='--')
-		ax[i].set_ylim([0,1.2])
-		ax[i].grid()
-		ax[i].set_xlim([-1.5,0.5])
-		ax[i].legend(loc='upper left')
-		# wthtv
-		somme = wthtv_up_p+wthtv_sub_p+wthtv_down_p # +wthtv_env_p
-		print(case,'QV0=',Qv0,'min(wthtv)=',np.amin(WTHV_total.values))
-		part_up = mean_vertical_contrib(wthtv_up_p,wthtv_mean,indzi).values
-		part_sub = mean_vertical_contrib(wthtv_sub_p,wthtv_mean,indzi).values
-		part_down = mean_vertical_contrib(wthtv_down_p,wthtv_mean,indzi).values
-		part_env = mean_vertical_contrib(wthtv_env_p,wthtv_mean,indzi).values
-		obj_over_all = mean_vertical_contrib(somme,wthtv_mean,indzi).values
-		ax2[i].plot( wthtv_up_p/Qv0,Z/ABLH,c='red',label='up ('+str(np.round(part_up*100,1))+'%)')
-		ax2[i].plot( wthtv_sub_p/Qv0,Z/ABLH,c='purple',label='ss ('+str(np.round(part_sub*100,1))+'%)')
-		ax2[i].plot( wthtv_down_p/Qv0,Z/ABLH,c='green',label='down ('+str(np.round(part_down*100,1))+'%)')
-		#ax2[i].plot( wthtv_env_p/Qv0,Z/ABLH,c='grey',label='env ('+str(np.round(part_env*100,1))+'%)')
-		ax2[i].plot( somme/Qv0,Z/ABLH,c='black',label='all ('+str(np.round(obj_over_all*100,1))+'%)')
-		ax2[i].plot( WTHV_total/Qv0,Z/ABLH,c='k',label='mean',ls='--')
-		ax2[i].set_ylim([0,1.2])
-		ax2[i].grid()
-		ax2[i].set_xlim([-0.3,1.1])
-		ax2[i].legend(loc='upper right')
-		# format uw plot
-		ax[0].set_title(r'refC',loc='right')
-		ax[0].set_ylabel(r'z/$z_i$')
-		ax[0].set_xlabel(r"$<\~ u \~ w >/u^{*2}$")
-		ax[1].set_title(r'refW',loc='right')
-		ax[1].set_xlabel(r"$<\~ u \~ w >/u^{*2}$")
-		ax[0].xaxis.label.set_fontsize(13)
-		ax[0].yaxis.label.set_fontsize(13)
-		ax[1].xaxis.label.set_fontsize(13)
-		ax[1].yaxis.label.set_fontsize(13)
-		ax[0].xaxis.set_major_locator(MultipleLocator(0.5))
-		ax[0].grid(True,'major')
-		ax[1].xaxis.set_major_locator(MultipleLocator(0.5))
-		ax[1].grid(True,'major')
-		#ax[1].tick_params(axis='both',labelleft=False)
-		# format wthtv plot
-		ax2[0].set_title(r'refC',loc='right')
-		ax2[0].set_ylabel(r'z/$z_i$')
-		ax2[0].set_xlabel(r"$<\~ w \~ \theta_v >/ Q_v^*$")
-		ax2[1].set_title(r'refW',loc='right')
-		ax2[1].set_xlabel(r"$<\~ w \~ \theta_v >/ Q_v^*$")
-		#ax2[1].tick_params(axis='both',labelleft=False)		
-	# saving		
-	fig.savefig(path_save+'ref_uw_nice_flx.png')	
-	fig2.savefig(path_save+'ref_wthtv_nice_flx.png')	
 
 def plot_CS1_S1(X,Y,Z,Z_w,dsref,dsflx,dsCS1,SVT_type,SEUIL_ML,L_atziXY,atyXZ,L_var,L_plot,L_atX,Xloc_forYZ,Tloc_forYZ,K,PLOT_CONTRIB,PLOT_REF,path_save,name,dpi):
 	"""description à adapter pour le cas S1
@@ -1970,142 +2902,6 @@ def Buoy_in_structures(X,Z,SST,dsref,crit_value,TURB_COND,SVT_type,RV_DIFF,DIR,L
 		ax[0].set_title(r'$\theta_v$ (K) - 297K')
 		ax[0].legend()
 		fig.savefig(path_save2+'CS1_THTVup_vs_THTVmean_X.png')
-	
-def Contrib_flux_Tau(chunksNOHALO,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,path_CS1,dpi):
-	"""
-	This procedure is plotting the contribution of the different coherent structures detected by a chosen conditonal sampling.
-	The input data should have different radio decay for the passive tracers (same tau for all tracers)
-	
-	INPUTS
-		- chunksNOHALO 	: chunks sizes when MNH halo has already been removed
-		- data 			: 3D fields, with conditional sampling filter, data is ouput of 'build_CS1' from module_building_files
-		- data_mean 	: mean fields from 000 diachronic file, opened with 'Open_LES_MEAN' from module_building_files
-		- param_COND 	: parameters for conditional samplings
-		- L_TURB_COND 	: choice of conditional sampling
-		- SVT_type 		: type of tracer used, 'SVT' or 'RV'
-		- RV_DIFF 		: if SVT_type=='RV', choose between using fluctuations of RV
-							with respect to horizontal mean value or mean mixed layer value
-		- path_CS1 		: where to save the CS files and the plot
-		- dpi 			: for figures
-		
-	OUTPUT
-		a plot with 2 figures (one for flux uw and one for wthtv):
-			- Y axis : contribution to the flux for each structure
-			- X axis : radio decay constante (tau)
-	
-	NOTE 07/08/24 : tau has been changed for nu to be consistent with paper notation
-	
-	"""
-	
-	L_name = ['up','sub','down','env','all']
-	L_col = ['red','purple','green','grey','black']
-	Tau = np.array([1,4,7,10,12,15,20,30,40])
-	Tauref = 15
-	indTauref = nearest(Tau,Tauref)
-	# 1) building CS for each files
-	SEUIL_ML = 0.5
-	indt = -1				# time index for ref simus, -1 <=> t=+3h
-	build_CS1(nhalo,data,data_mean,param_COND,
-		L_TURB_COND,SVT_type,RV_DIFF,0.5,-1,path_CS1)
-	for case in data.keys(): data[case].close() # closing OUT files
-	# 2) getting flux decomposition
-	TURB_COND = L_TURB_COND[0]
-	dsCS = {'1min':xr.open_dataset(path_CS1+'CS1_1min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
-			'4min':xr.open_dataset(path_CS1+'CS1_4min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
-			'7min':xr.open_dataset(path_CS1+'CS1_7min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
-			'10min':xr.open_dataset(path_CS1+'CS1_10min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
-			'12min':xr.open_dataset(path_CS1+'CS1_12min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
-			'15min':xr.open_dataset(path_CS1+'CS1_15min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
-			'20min':xr.open_dataset(path_CS1+'CS1_20min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
-			'30min':xr.open_dataset(path_CS1+'CS1_20min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO),
-			'40min':xr.open_dataset(path_CS1+'CS1_20min_'+TURB_COND+'_'+SVT_type+RV_DIFF+'_m1.nc',chunks=chunksNOHALO)}
-	flx_uw = np.zeros((len(dsCS.keys()),5)) # 9 tau and 5 structures (objects + their sum)
-	flx_wthtv = np.zeros((len(dsCS.keys()),5)) # 9 tau and 5 structures (objects + their sum)
-	for i,case in enumerate(dsCS.keys()):
-		ds = dsCS[case]
-		# pathsave
-		path_save2 = path_CS1 + 'Sensitivity_tau_' + TURB_COND
-		if TURB_COND=='C10':
-			mCS = ds.attrs['mCS']
-			gammaRV = ds.attrs['gammaRv']
-			path_save2 = path_save2+'_m'+str(mCS)+'_g'+str(gammaRV*100)
-		elif TURB_COND=='ITURB2':
-			gammaTurb2 = ds.attrs['gammaTurb2']
-			path_save2 = path_save2+'_g'+str(gammaTurb2*100)
-		elif TURB_COND=='ITURB':
-			gammaTurb1 = ds.attrs['gammaTurb1']
-			path_save2 = path_save2+ '_g'+str(gammaTurb1*100)
-		elif TURB_COND=='EC':
-			gammaEc = ds.attrs['gammaEc']
-			path_save2 = path_save2 +'_g'+str(gammaEc*100)
-		if SVT_type=='RV':
-			path_save2 = path_save2+'_'+RV_DIFF+'_'+SVT_type+'.png'
-		else:
-			path_save2 = path_save2+'_'+SVT_type+'.png'
-		
-		uw = (ds.UT - ds.UTm)*ds.WT
-		wthtv = ds.WT*(ds.THTV - ds.THTVm)
-		uw_m = uw.mean(dim=['ni','nj'])
-		wthtv_m = wthtv.mean(dim=['ni','nj'])
-		uw_obj = {}
-		wthtv_obj = {}
-		uw_obj['all'],wthtv_obj['all'] = np.zeros((5)),np.zeros((5))
-		gTHTv = ds.THTVm[:,0,0].differentiate('level')
-		ABLHm = ds.level[gTHTv.argmax(dim='level').values].mean().values
-		indzi = nearest(ds.level.values,1.1*ABLHm)
-		sum1,sum2 = np.zeros(len(ds.level)),np.zeros(len(ds.level))
-		for k,struc in enumerate(['up','sub','down','env']):
-			# first flux decomposition
-			temp1 =	compute_flx_contrib(uw,[ds['is_'+struc]],meanDim=['ni','nj'])
-			temp2 =	compute_flx_contrib(wthtv,[ds['is_'+struc]],meanDim=['ni','nj'])
-			sum1 = sum1 + temp1
-			sum2 = sum2 + temp2
-			# then vertical average
-			flx_uw[i,k] = mean_vertical_contrib(temp1,uw_m,indzi)
-			flx_wthtv[i,k] = mean_vertical_contrib(temp2,wthtv_m,indzi)
-		# get contribution from all detected structures
-		flx_uw[i,-1] = mean_vertical_contrib(sum1,uw_m,indzi)
-		flx_wthtv[i,-1] = mean_vertical_contrib(sum2,wthtv_m,indzi)
-	# 3) Plotting
-	fig, ax = plt.subplots(2,1,figsize = (5,8),constrained_layout=True,dpi=dpi)
-	ax1 = inset_axes(ax[0], width="60%", height="50%", loc=4,borderpad=2)
-	ax2 = inset_axes(ax[1], width="60%", height="50%", loc=4,borderpad=2)
-	for k in range(len(L_name)):
-		if L_name[k]!='env':
-			ax[0].plot(Tau,(flx_uw[:,k]-flx_uw[indTauref,k])*100,c=L_col[k],label=L_name[k])
-			ax1.plot(Tau,(flx_uw[:,k]-flx_uw[indTauref,k])*100,c=L_col[k],label=L_name[k])
-			ax[1].plot(Tau,(flx_wthtv[:,k]-flx_wthtv[indTauref,k])*100,c=L_col[k],label=L_name[k])
-			ax2.plot(Tau,(flx_wthtv[:,k]-flx_wthtv[indTauref,k])*100,c=L_col[k],label=L_name[k])
-	ax[0].set_ylabel('Contribution anomaly \n'+r'(% over $\nu$='+str(Tauref)+'min)')
-	ax[0].set_title(r"$< \~ u \~w >$",loc='left')
-	ax[0].legend(loc='upper right')
-	ax[1].set_xlabel(r'$\nu$ (min)')
-	ax[1].set_ylabel('Contribution anomaly \n'+r'(% over $\nu$='+str(Tauref)+'min)')
-	ax[1].set_title(r"$< \~ w \~ \theta_v>$",loc='left')
-	#fig.suptitle(r'Sensitivity tests on $\tau$')
-	ax1.set_ylim([-5,5])
-	ax2.set_ylim([-5,5])
-	fig.savefig(path_save2)
-	
-	# absolute values
-#	fig, ax = plt.subplots(2,1,figsize = (7,8),constrained_layout=True,dpi=dpi)
-#	ax1 = inset_axes(ax[0], width="80%", height="50%", loc=4,borderpad=2)
-#	ax2 = inset_axes(ax[1], width="80%", height="50%", loc=4,borderpad=2)
-#	for k in range(len(L_name)):
-#		ax[0].plot(Tau,(flx_uw[:,k])*100,c=L_col[k],label=L_name[k])
-#		ax1.plot(Tau,(flx_uw[:,k])*100,c=L_col[k],label=L_name[k])
-#		ax[1].plot(Tau,(flx_wthtv[:,k])*100,c=L_col[k],label=L_name[k])
-#		ax2.plot(Tau,(flx_wthtv[:,k])*100,c=L_col[k],label=L_name[k])
-#	ax[0].set_ylabel('object contribution (%)')
-#	ax[0].set_title(r"$\overline{u'w'}$",loc='left')
-#	ax[0].legend(loc='upper right')
-#	ax[1].set_xlabel(r'$\tau$ (min)')
-#	ax[1].set_ylabel('object contribution (%)')
-#	ax[1].set_title(r"$\overline{w'\theta_v'}$",loc='left')
-#	fig.suptitle(r'Sensitivity tests on $\tau$')
-#	ax1.set_ylim([-5,5])
-#	ax2.set_ylim([-5,5])
-	#fig.savefig(path_save2)
 
 def Hovmoller_up_down_cover(X,Z,N_timeO,chunksNOHALO,path_save,dpi):
 	"""Plot Hovmöller diagram of Y averaged cover of updrafts and downdrafts
@@ -2478,8 +3274,6 @@ def u_and_w_fluc_in_updrafts(X,Z,dsCS1,dataSST,K,crit_value,L_atX,path_save,dpi)
 	fig.savefig(path_save+"_in_updrafts.png")
 	fig2.savefig(path_save+"_in_other.png")
 	
-
-
 def C10_downdraft_detection_change(X,Z,Y,abs_path,chunksOUT,chunksNOHALO,nhalo,dpi):
 	"""
 	 problem : downdrafts not well detected by C10.
@@ -2680,337 +3474,6 @@ def C10_downdraft_detection_change(X,Z,Y,abs_path,chunksOUT,chunksNOHALO,nhalo,d
 	ds.close()
 	ds2.close()
 
-def movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save):
-	"""
-	This procedure is plotting the images needed to build a movie of the coherent structures evolution
-	
-	INPUTS:
-		- X			: X dimension of the sim
-		- Y			: Y dimension of the sim
-		- Z			: Z dimension of the sim
-		- L_TURB_COND : Choice of conditional sampling (C10 or ITURB2)
-		- dataSST	: 1D SST(x)
-		- SEUIL_ML	: thetav threshold to detect mixed layer
-		- ini_t 	: integer, index of time. instant of interested to start from
-		- ini_x 	: integer, index of ni. X position of interested to start from
-		- tmin 		: how far back in time to look 
-		- tmax 		: how far forward in time to look
-		- fps 		: movie frame per seconde
-		- stepy 	: vector field : skipping cells Y
-		- stepz 	: vector field : skipping cells Z
-		- Awidth 	: vector field : arrow width
-		- scale 	: vector field : size of arrows
-		- path_save : where to save images/movie
-		
-	OUPUTS : 
-		- images to build the movie
-		- command line to build the movie (with ffmpeg)
-	"""	
-	
-	ds = xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN.nc',chunks=chunksNOHALO)
-	# getting global objects
-	u_f = ds.UT-ds.UTm
-	v_f = ds.VT-ds.VTm
-	w_f = ds.WT-ds.WTm
-	sv1_f = ds.SV1-ds.SV1m
-	sv4_f = ds.SV4-ds.SV4m
-	sv3_f = ds.SV3-ds.SV3m
-	gTHTV = ds.THTVm[0,:,0,:].differentiate('level')
-	RV,RVm = ds.RVT,ds.RVTm
-	# getting advection velocity : for now is constant
-	ABLH = 600 	# m
-	dt = 30 	# s, OUT frequency
-	dx = 50		# m, horizontal res
-	indzzi = nearest(Z.values,1*ABLH)
-	U = 6.53 # m/s, = dsmean.Um.isel(level=slice(0,indzzi)).mean(dim='ni').integrate('level') / ABLH
-	fetch = int(np.round(U*dt/dx,0)) # to get integer
-	
-	# test : does the intg. advection velocity changes along x ? and if yes how much ?
-	# TBD
-	
-	for TURB_COND in L_TURB_COND:
-		path_save2 = path_save + 'T'+str(tmin)+'-T'+str(tmax)+'_t'+str(ini_t)+'_i'+str(ini_x)+'/'
-		path_save_frames = path_save2 + 'frames_'+TURB_COND+'/'
-		if not pathlib.Path(path_save_frames).is_dir():
-			os.makedirs(path_save_frames)
-		if TURB_COND=='C10':
-			obj = ds.global_objects
-			cmap = c.ListedColormap(['white','r','purple','g','grey','orange','pink'])
-			c_range = np.arange(0,7,1)
-			c_label = ['other','up','ss','down','env','up2','ss2']
-			obj_max = 6.5
-			
-		print('	TURB_COND=',TURB_COND,'ini_t=',ini_t,'ini_x=',ini_x,'U=',U,',fetch=',fetch)
-		L_t = np.zeros(tmax-tmin+1,dtype=np.int32)
-		L_f = np.zeros(tmax-tmin+1,dtype=np.int32)
-		RVmixed = np.zeros(tmax-tmin+1)
-		
-		print('	looking back up to tmin')
-		t = ini_t
-		f = ini_x
-		while t >= tmin:
-			indx = f 
-			print('		time,indx =',t,indx)
-			# computing rvmixed(x)
-			ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
-			RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
-			L_t[t-tmin] = t
-			L_f[t-tmin] = f
-			t = t-1
-			f = indx - fetch
-			if f==0: f = 768-1 # cyclic condition
-			
-		print('	looking forward up to tmax')
-		t = ini_t
-		f = ini_x
-		while t <= tmax:
-			indx = f 
-			print('		time,indx =',t,indx)
-			# computing rvmixed(x)
-			ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
-			RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
-			
-			L_t[t-tmin] = t
-			L_f[t-tmin] = f
-			t = t+1
-			f = indx + fetch
-			if f==768-1: f = 0 # cyclic condition
-		# Plot	
-		print('	Plotting ...')
-		for t in L_t:
-			indx = L_f[t-tmin]
-			fig = plt.figure(figsize = (15,8),layout="constrained",dpi=200)
-			gs = GridSpec(4, 8, figure=fig)
-			# -> SST
-			ax1 = fig.add_subplot(gs[3,:])
-			ax1.plot(X/1000,dataSST,c='k')
-			ax1.scatter(X[indx]/1000,dataSST[indx],marker='x',c='k')
-			ax1.set_ylabel('SST (K)')
-			ax1.set_xlabel('X (km)')
-			# -> obj
-			ax2 = fig.add_subplot(gs[0:3,0:2])
-			s = ax2.pcolormesh( Y/1000,Z/ABLH,obj[t,:,:,indx],cmap=cmap,vmin=-0.5,vmax=obj_max)
-			Q = ax2.quiver(Y[::stepy]/1000,Z[::stepz]/ABLH,v_f[t,::stepz,::stepy,indx],w_f[t,::stepz,::stepy,indx],
-					angles='uv',pivot='middle',width=Awidth,headwidth=3,headaxislength=2,headlength=2,scale=scale)
-			cbar = plt.colorbar(s,ax=ax2,pad=0.05,orientation='horizontal',aspect=10)
-			cbar.set_ticks(c_range)
-			cbar.ax.set_xticklabels(c_label,rotation=45)
-			ax2.set_aspect(2.0)
-			ax2.quiverkey(Q, 0.05, 0.9, 1, '1 m/s', labelpos='E',coordinates='figure',angle=0) # Reference arrow horizontal
-			ax2.set_ylabel('z/zi')
-			ax2.set_ylim([0,1.2])
-			ax2.set_title('objects',loc='right')
-			# -> surface tracers
-			ax3 = fig.add_subplot(gs[0:3,2:4])
-			linthresh = 0.01
-			vmextrm = 10
-			rounding = 2 # this is linthresh = 10^(-rounding)
-			sfx_tracer = xr.where(ds.SV1>ds.SV4,sv1_f.where(sv1_f>0),-sv4_f.where(sv4_f>0))
-			NORM = c.SymLogNorm(linthresh=linthresh, linscale=0.03,vmin=-vmextrm, vmax=vmextrm, base=10)
-			s = ax3.pcolormesh( Y/1000,Z/ABLH, sfx_tracer[t,:,:,indx],cmap='PuOr',norm=NORM) # 
-			cb = plt.colorbar(s,ax=ax3,pad=0.05,orientation='horizontal',aspect=10)
-			major_loc = np.round(cb.get_ticks(),rounding)
-			minor_loc = Minor_ticks_symLog(major_loc,linthresh)
-			if linthresh in cb.get_ticks():
-				major_loc = np.delete(major_loc,[len(major_loc)//2-1,len(major_loc)//2+1])
-			cb.set_ticks(minor_loc,minor=True)
-			cb.set_ticks(major_loc)
-			cb.set_ticklabels([str(np.abs(np.round(tick,rounding))) for tick in major_loc])
-			ax3.set_ylim([0,1.2])
-			ax3.set_aspect(2.0)
-			ax3.set_title('surface tracers',loc='right')
-			# -> top tracer
-			ax4 = fig.add_subplot(gs[0:3,4:6])
-			s = ax4.pcolormesh( Y/1000,Z/ABLH, sv3_f[t,:,:,indx],cmap='Blues',vmin=0.1,vmax=500,norm="log")
-			plt.colorbar(s,ax=ax4,pad=0.05,orientation='horizontal',aspect=10)
-			ax4.set_ylim([0,1.2])
-			ax4.set_aspect(2.0)
-			ax4.set_title('top tracer',loc='right')
-			# -> rvmixed
-			ax5 = fig.add_subplot(gs[0:3,6:])
-			s = ax5.pcolormesh( Y/1000,Z/ABLH, (RV-RVmixed[t-tmin])[t,:,:,indx]*1000,cmap='BrBG',vmin=-1,vmax=1)
-			plt.colorbar(s,ax=ax5,pad=0.05,orientation='horizontal',aspect=10)
-			ax5.set_ylim([0,1.2])
-			ax5.set_aspect(2.0)
-			ax5.set_title(r'r$_v$ - r$_{v,mixed}$',loc='right')
-			fig.suptitle('obj '+TURB_COND+', t='+str(t)+', i='+str(indx))
-			fig.savefig(path_save_frames+f"{t:03}"+'.png')
-			plt.close(fig)
-		# building movie
-		print(' Building movie with the following cmd:')
-		print('ffmpeg -framerate '+str(fps)+' -start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save2+'movie_'+TURB_COND+'.mp4')
-		#os.system('ffmpeg -framerate '+str(fps)+'-start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save+'movie.mp4')
-
-def movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save):
-	"""
-	This procedure is plotting the images needed to build a movie of the coherent structures.
-	Same as 'movie_coherent_structures' but with few plots and coherent structure categories.
-	
-	INPUTS:
-		- X			: X dimension of the sim
-		- Y			: Y dimension of the sim
-		- Z			: Z dimension of the sim
-		- L_TURB_COND : Choice of conditional sampling (C10 or ITURB2)
-		- dataSST	: 1D SST(x)
-		- SEUIL_ML	: thetav threshold to detect mixed layer
-		- ini_t 	: integer, index of time. instant of interested to start from
-		- ini_x 	: integer, index of ni. X position of interested to start from
-		- tmin 		: how far back in time to look 
-		- tmax 		: how far forward in time to look
-		- fps 		: movie frame per seconde
-		- stepy 	: vector field : skipping cells Y
-		- stepz 	: vector field : skipping cells Z
-		- Awidth 	: vector field : arrow width
-		- scale 	: vector field : size of arrows
-		- path_save : where to save images/movie
-		
-	OUPUTS : 
-		- images to build the movie
-		- command line to build the movie (with ffmpeg)
-	"""
-	BOOL_SST = False
-	ds = xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)
-	# getting global objects
-	u_f = ds.UT-ds.UTm
-	v_f = ds.VT-ds.VTm
-	w_f = ds.WT-ds.WTm
-	gTHTV = ds.THTVm[0,:,0,:].differentiate('level')
-	RV,RVm = ds.RVT,ds.RVTm
-	THT,THTm = ds.THTV,ds.THTVm
-	# getting advection velocity : for now is = constant
-	ABLH = 600 	# m
-	dt = 30 	# s, OUT frequency
-	dx = 50		# m, horizontal res
-	indzzi = nearest(Z.values,1*ABLH)
-	U = 6.53 # m/s, = dsmean.Um.isel(level=slice(0,indzzi)).mean(dim='ni').integrate('level') / ABLH
-	fetch = int(np.round(U*dt/dx,0)) # to get integer
-	unity = xr.ones_like(RV)
-	zeros = unity - 1
-	for TURB_COND in L_TURB_COND:
-		path_save2 = path_save + 'T'+str(tmin)+'-T'+str(tmax)+'_t'+str(ini_t)+'_i'+str(ini_x)+'/'
-		path_save_frames = path_save2 + 'frames_clean_'+TURB_COND+'/'
-		if not pathlib.Path(path_save_frames).is_dir():
-			os.makedirs(path_save_frames)
-		if TURB_COND=='C10':
-			obj = ds.global_objects
-			cmap = c.ListedColormap(['white','r','purple','orange','pink','g',])
-			c_range = np.arange(0,6,1)
-			c_label = ['other','up','ss','up2','ss2','down']
-			obj_max = 5.5
-			obj_clean = obj
-			obj_clean = xr.where(obj==1,unity,zeros) # updrafts
-			obj_clean = xr.where(obj==2,2*unity,obj_clean) # ss
-			obj_clean = xr.where(obj==5,3*unity,obj_clean) # updrafts 2
-			obj_clean = xr.where(obj==6,4*unity,obj_clean) # ss2
-			obj_clean = xr.where(obj==3,5*unity,obj_clean) # downdrafts
-		elif TURB_COND=='ITURB2':
-			ds2 = xr.open_dataset('DATA_turb/06W_CS1_S1_ITURB2_RVMIXED.nc',chunks=chunksNOHALO)
-			obj = ds2.global_objects
-			cmap = c.ListedColormap(['white','r','g',])
-			c_range = np.arange(0,3,1)
-			c_label = ['other','up','down']
-			obj_max = 2.5
-			obj_clean = obj
-			obj_clean = xr.where(obj==1,unity,zeros)
-			obj_clean = xr.where(obj==3,2*unity,obj_clean)
-			
-		print('	TURB_COND=',TURB_COND,'ini_t=',ini_t,'ini_x=',ini_x,'U=',U,',fetch=',fetch)
-		L_t = np.zeros(tmax-tmin+1,dtype=np.int32)
-		L_f = np.zeros(tmax-tmin+1,dtype=np.int32)
-		RVmixed = np.zeros(tmax-tmin+1)
-		THTmixed = np.zeros(tmax-tmin+1)
-		
-		print('	looking back up to tmin')
-		t = ini_t
-		f = ini_x
-		while t >= tmin:
-			indx = f 
-			print('		time,indx =',t,indx)
-			# computing rvmixed(x)
-			ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
-			RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
-			THTmixed[t-tmin] = ( THTm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values		
-			L_t[t-tmin] = t
-			L_f[t-tmin] = f
-			t = t-1
-			f = indx - fetch
-			if f==0: f = 768-1 # cyclic condition
-			
-		print('	looking forward up to tmax')
-		t = ini_t
-		f = ini_x
-		while t <= tmax:
-			indx = f 
-			print('		time,indx =',t,indx)
-			# computing rvmixed(x)
-			ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
-			RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
-			THTmixed[t-tmin] = ( THTm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
-			L_t[t-tmin] = t
-			L_f[t-tmin] = f
-			t = t+1
-			f = indx + fetch
-			if f==768-1: f = 0 # cyclic condition
-		# Plot	
-		print(' Plotting ...')
-		for t in L_t:
-			indx = L_f[t-tmin]
-			
-			if BOOL_SST:
-				fig = plt.figure(figsize = (8,8),layout="constrained",dpi=200)
-				gs = GridSpec(2, 4, figure=fig)
-				# -> SST
-				ax1 = fig.add_subplot(gs[2,:])
-				ax1.plot(X/1000,dataSST,c='k')
-				ax1.scatter(X[indx]/1000,dataSST[indx],marker='x',c='k')
-				ax1.set_ylabel('SST (K)')
-				ax1.set_xlabel('X (km)')
-			else:
-				fig = plt.figure(figsize = (7.5,6.1),layout="constrained",dpi=200)
-				gs = GridSpec(1, 4, figure=fig)
-			# -> obj
-			ax2 = fig.add_subplot(gs[0,0:2])
-			s = ax2.pcolormesh( Y/1000,Z/ABLH,obj_clean[t,:,:,indx],cmap=cmap,vmin=-0.5,vmax=obj_max)
-			Q = ax2.quiver(Y[::stepy]/1000,Z[::stepz]/ABLH,v_f[t,::stepz,::stepy,indx],w_f[t,::stepz,::stepy,indx],
-					angles='uv',pivot='middle',width=Awidth,headwidth=3,headaxislength=2,headlength=2,scale=scale)
-			cbar = plt.colorbar(s,ax=ax2,pad=0.05,orientation='horizontal',aspect=10)
-			cbar.set_ticks(c_range)
-			cbar.ax.set_xticklabels(c_label,rotation=45)
-			ax2.set_aspect(2.0)
-			ax2.quiverkey(Q, 0.43, 0.17, 1, '1 m/s', labelpos='E',coordinates='figure',angle=0) # Reference arrow horizontal
-			ax2.set_ylabel(r'z/$z_i$')
-			ax2.set_ylim([0,1.2])
-			ax2.set_xlabel('Y (km)')
-			ax2.set_title('objects',loc='right')
-			# -> thtmixed
-			"""
-			To add thtv, i would need to remove the warming trend from the data. 
-			THTVm is a time average so if i plot thtv-thtvm it is not representative of instantaneous buoyancy
-			"""
-	#		ax3 = fig.add_subplot(gs[0:3,2:4])
-	#		s = ax3.pcolormesh( Y/1000,Z/ABLH, (THT-THTmixed[t-tmin])[t,:,:,indx],cmap='bwr',vmin=-1,vmax=1) # 
-	#		plt.colorbar(s,ax=ax3,pad=0.05,orientation='horizontal',aspect=10)
-	#		ax3.set_ylim([0,1.2])
-	#		ax3.set_aspect(2.0)
-	#		ax3.set_title(r'$\theta_v$ - $\theta_{v,mixed}$',loc='right')
-
-			# -> rvmixed
-			ax4 = fig.add_subplot(gs[0,2:])
-			s = ax4.pcolormesh( Y/1000,Z/ABLH, (RV-RVmixed[t-tmin])[t,:,:,indx]*1000,cmap='BrBG',vmin=-1,vmax=1)
-			plt.colorbar(s,ax=ax4,pad=0.05,orientation='horizontal',aspect=10)
-			ax4.set_ylim([0,1.2])
-			ax4.set_aspect(2.0)
-			ax4.tick_params(axis='both',labelleft=False)
-			ax4.set_title(r'r$_v$ - r$_{v,mixed}$ (g.kg$^{-1}$)',loc='right')
-			fig.suptitle('obj '+TURB_COND+', t='+str(t)+', i='+str(indx))
-			ax4.set_xlabel('Y (km)')
-			fig.savefig(path_save_frames+f"{t:03}"+'.png')
-			plt.close(fig)
-		# building movie
-		print(' Building movie with the following cmd:')
-		print('ffmpeg -framerate '+str(fps)+' -start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save2+'movie_clean_'+TURB_COND+'.mp4')
-
-
 
 def One_frame_from_movieCS_C10vsITURB2(X,Y,Z,chunksNOHALO,L_atX,stepy,stepz,indt,SEUIL_ML,path_save,dpi):
 	"""
@@ -3085,631 +3548,11 @@ def One_frame_from_movieCS_C10vsITURB2(X,Y,Z,chunksNOHALO,L_atX,stepy,stepz,indt
 		ax[1,1].set_xlabel('Y (km)')
 		ax[1,1].set_title(r"s$_{v3}'$",loc='right') 
 		fig.savefig(path_save2)	
-		
-def CS1_ref_time_mean(nhalo):
-	"""testing temporal mean for CS1 warm (WIP)"""
-	path_in = 'CAS10_SVT/FICHIERS_OUT/*'
-	dsO = xr.open_mfdataset(path_in)
-	dsB = xr.open_dataset('CAS10_SVT/CAS10.1.002.002.nc')
-	case = 'warm'
-	indt = -1 
-	# getting the data
-	U = dsO.UT.interp({'ni_u':dsO.ni})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 	# grid : 2
-	V = dsO.VT.interp({'nj_v':dsO.nj})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] 	# grid : 3
-	W = dsO.WT.interp({'level_w':dsO.level})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo] # grid : 4
-	SV1 = dsO.SVCS000[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
-	SV2 = dsO.SVCS001[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
-	SV3 = dsO.SVCS002[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
-	U = U.rename(new_name_or_name_dict={'nj_u':'nj'})
-	V = V.rename(new_name_or_name_dict={'ni_v':'ni'})
-	Um = data_mean[case]['nomean']['Mean']['MEAN_U'][indt,:]
-	Vm = data_mean[case]['nomean']['Mean']['MEAN_V'][indt,:]
-	Wm = data_mean[case]['nomean']['Mean']['MEAN_W'][indt,:]
-	ABLH = data_mean[case]['nomean']['Misc']['BL_H'][indt]
-	SV1m = data_mean[case]['nomean']['Mean']['MEAN_SV'][0,indt,:]
-	SV2m = data_mean[case]['nomean']['Mean']['MEAN_SV'][1,indt,:]
-	SV3m = data_mean[case]['nomean']['Mean']['MEAN_SV'][2,indt,:]
-	SV1_2m = data_mean[case]['nomean']['Resolved']['RES_SV2'][0,indt,:] # no sbg sv'² in mnh
-	SV2_2m = data_mean[case]['nomean']['Resolved']['RES_SV2'][1,indt,:]
-	SV3_2m = data_mean[case]['nomean']['Resolved']['RES_SV2'][2,indt,:]
-	SV1m = SV1m.rename(new_name_or_name_dict={'level_les':'level'})
-	SV2m = SV2m.rename(new_name_or_name_dict={'level_les':'level'})
-	SV3m = SV3m.rename(new_name_or_name_dict={'level_les':'level'})
-	SV1_2m = SV1_2m.rename(new_name_or_name_dict={'level_les':'level'})
-	SV2_2m = SV2_2m.rename(new_name_or_name_dict={'level_les':'level'})
-	SV3_2m = SV3_2m.rename(new_name_or_name_dict={'level_les':'level'}) 
-	Um,Vm,Wm,RVm,THTm,THTVm,Em,RV2m,ABLH= Complete_dim_like([Um,Vm,Wm,RVm,THTm,THTVm,Em,RV2m,ABLH]	 ,U[:,:,:,:])
-	SV1m,SV2m,SV3m,SV1_2m,SV2_2m,SV3_2m = Complete_dim_like([SV1m,SV2m,SV3m,SV1_2m,SV2_2m,SV3_2m],U[:,:,:,:])
-	raise Exception('Code to be terminated for safety')	
-	
-def C10vsITURB2(X,Z,Y,chunksNOHALO,dpi):
-	"""
-	 verifying the hypothesis of core + intromission zone 
-	 both for uppdraft and downdrafts.
-	
-	 hypothesis : C10 detect only core while ITURB2 is detecting core+int. zone
-	 results : seems ok for updraft but not at all for downdraft
-	 Methods:
-	 - XY plot, with contours of both detections for both structures
-	 - a way of quantifying the distance between the boundaries of the same structures but detected by the 2 CS.
-	
-	INPUT
-		- X 	: X dimension
-		- Z 	: Z dimension
-		- Y 	: Y dimension
-		- chunksNOHALO : for dask, chunks when halo has been removed
-		- dpi 	: for figures
-	
-	OUTPUT
-		- For all height in L_atzzi, XY plot of objects (background ITURB2, contours C10) with anomaly of wind as a vector field.
-		- Counts of vertical velocity for the object 'updraft' and 'downdraft' for the two conditional samplings
-		
-	NOTE
-		- figures to be saved manually
-		- for the histogram, count over (X2-X1) km, Y and time.
-	"""
-	
-	dsC10 = xr.open_dataset('DATA_turb/06W_CS1_S1_C10_SVTMEAN.nc',chunks=chunksNOHALO)
-	dsITURB = xr.open_dataset('DATA_turb/06W_CS1_S1_ITURB2_RVMIXED.nc',chunks=chunksNOHALO)
-	obj = {'C10':dsC10.global_objects,'ITURB2':dsITURB.global_objects}
-	U,Um = dsC10.UT,dsC10.UTm
-	V,Vm = dsC10.VT,dsC10.VTm
-	W = dsC10.WT
-	ABLH = 600
-	# 1) XY plot, with contours of both detections for both structures
-	# -> very similar between the CS but in the mixed layer (bc of how is defined rvmixed ??)
-	#		it suggests that the distinction is in the mixed layer
-	if True:
-		X1,X2 = 10,15 # km
-		L_atzzi = [0.2,0.5,0.8,1.0] # in [0,1]
-		indt = -1
-		stepx,stepy = 2,2
-		
-		
-		indx1 = nearest(X.values,X1*1000)
-		indx2 = nearest(X.values,X2*1000)
-		
-		for atzzi in L_atzzi:
-			indz = nearest(Z.values,atzzi*ABLH)
-			fig, ax = plt.subplots(2,1,figsize = (10,10),constrained_layout=True,dpi=dpi)
 			
-			s = ax[0].pcolormesh(X[indx1:indx2]/1000,Y/1000,obj['ITURB2'][indt,indz,:,indx1:indx2],cmap = c.ListedColormap(['white','r','purple','g','grey']),alpha=0.5)
-			#plt.colorbar(s,ax=ax)
-			ax[0].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==1,1,0),levels=[0.55],colors=['r'],linewidths=1.0)
-			ax[0].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==2,1,0),levels=[0.55],colors=['purple'],linewidths=1.0)
-			ax[0].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==3,1,0),levels=[0.55],colors=['green'],linewidths=1.0)
-			ax[0].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==4,1,0),levels=[0.55],colors=['grey'],linewidths=1.0)
-			ax[0].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==5,1,0),levels=[0.55],colors=['orange'],linewidths=1.0)
-			ax[0].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==6,1,0),levels=[0.55],colors=['pink'],linewidths=1.0)
-			ax[0].set_ylabel('Y (km)')
-			ax[0].set_aspect('equal')
-			ax[0].set_title('back: ITURB2, contours:C10. At zzi='+str(atzzi),loc='right')
-			ax[1].pcolormesh( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,W[indt,indz,:,indx1:indx2],cmap='coolwarm',vmin=-1,vmax=1)
-			ax[1].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==1,1,0),levels=[0.55],colors=['r'],linewidths=1.0)
-			ax[1].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==2,1,0),levels=[0.55],colors=['purple'],linewidths=1.0)
-			ax[1].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==3,1,0),levels=[0.55],colors=['green'],linewidths=1.0)
-			ax[1].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==4,1,0),levels=[0.55],colors=['grey'],linewidths=1.0)
-			ax[1].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==5,1,0),levels=[0.55],colors=['orange'],linewidths=1.0)
-			ax[1].contour( X[indx1:indx2]/1000+0.05/2, Y/1000+0.05/2,xr.where(obj['C10'][indt,indz,:,indx1:indx2]==6,1,0),levels=[0.55],colors=['pink'],linewidths=1.0)
-			Q = ax[1].quiver(X[indx1:indx2:stepx]/1000,Y[::stepy]/1000,(U-Um)[indt,indz,::stepy,indx1:indx2:stepx],(V-Vm)[indt,indz,::stepy,indx1:indx2:stepx],
-					angles='uv',pivot='middle',headwidth=2,headaxislength=4,scale=30)
-			ax[1].quiverkey(Q, 0.9, 0.05, 0.5, '0.5 m/s', labelpos='E',coordinates='figure',angle=0) # Reference arrow horizontal
-			ax[1].set_ylabel('Y (km)')
-			ax[1].set_xlabel('X (km)')
-			ax[1].set_title('Wind (arrows:UV,background:W(m/s)). At zzi='+str(atzzi),loc='right')
-	
-	# distribution of W to check if C10 has stronger updrafts/downdrafts
-	if True:
-#					W_up = {'C10':W.where(np.logical_or(obj['C10']==1,obj['C10']==5),other=-999),'ITURB2':W.where(obj['ITURB2']==1,other=-999) }
-#					W_down = {'C10':W.where(obj['C10']==3,other=-999),'ITURB2':W.where(obj['ITURB2']==3,other=-999) }
-		W_up = {'C10':W.where(np.logical_or(obj['C10']==1,obj['C10']==5)),'ITURB2':W.where(obj['ITURB2']==1) }
-		W_down = {'C10':W.where(obj['C10']==3),'ITURB2':W.where(obj['ITURB2']==3) }
-		Nbins = 50
-		indt = -1
-		X1,X2 = 10,15 # km
-		L_atzzi = [0.2,0.5,0.8,1.0] # in [0,1]
-		indx1 = nearest(X.values,X1*1000)
-		indx2 = nearest(X.values,X2*1000)
-		
-		for atzzi in L_atzzi:
-			indz = nearest(Z.values,atzzi*ABLH)
-			fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
-			# np.hist
-#						ax.hist(W_up['C10'][indt,indz,:,indx1:indx2].values.flatten(),		density=True,bins=Nbins,range=(-2.0,2.0), histtype="step",color='r',label='upC10')
-#						ax.hist(W_up['ITURB2'][indt,indz,:,indx1:indx2].values.flatten(),	density=True,bins=Nbins,range=(-2.0,2.0), histtype="step",color='orange',label='upITURB2')
-#						ax.hist(W_down['C10'][indt,indz,:,indx1:indx2].values.flatten(),	density=True,bins=Nbins,range=(-2.0,2.0), histtype="step",color='g',label='downC10')
-#						ax.hist(W_down['ITURB2'][indt,indz,:,indx1:indx2].values.flatten(),	density=True,bins=Nbins,range=(-2.0,2.0), histtype="step",color='chartreuse',label='downITURB2')
-			# kde estimation of pdf
-#						sns.kdeplot(ax=ax,data=W_up['C10'][indt,indz,:,indx1:indx2].values.flatten(),c='r',label='upC10' )
-#						sns.kdeplot(ax=ax,data=W_up['ITURB2'][indt,indz,:,indx1:indx2].values.flatten(),c='orange',label='upITURB2' )
-#						sns.kdeplot(ax=ax,data=W_down['C10'][indt,indz,:,indx1:indx2].values.flatten(),c='g',label='downC10' )
-#						sns.kdeplot(ax=ax,data=W_down['ITURB2'][indt,indz,:,indx1:indx2].values.flatten(),c='chartreuse',label='downITURB2' )
-			# kde estimation of hist
-			sns.histplot(ax=ax,bins=Nbins,binrange=[-2.5,2.5],data=W_up['C10'][:,indz,:,indx1:indx2].values.flatten(),color='r',label='upC10',element="poly",fill=False )
-			sns.histplot(ax=ax,bins=Nbins,binrange=[-2.5,2.5],data=W_up['ITURB2'][:,indz,:,indx1:indx2].values.flatten(),color='orange',label='upITURB2',element="poly",fill=False )
-			sns.histplot(ax=ax,bins=Nbins,binrange=[-2.5,2.5],data=W_down['C10'][:,indz,:,indx1:indx2].values.flatten(),color='g',label='downC10',element="poly",fill=False )
-			sns.histplot(ax=ax,bins=Nbins,binrange=[-2.5,2.5],data=W_down['ITURB2'][:,indz,:,indx1:indx2].values.flatten(),color='chartreuse',label='downITURB2',element="poly",fill=False )
-			#ax.set_ylim([0,2.5])
-			ax.set_xlim([-2.5,2.5])
-			ax.set_ylabel('Occurences')
-			ax.set_xlabel('W (m/s)')
-			ax.set_title(r'X $\in$ ['+str(X1)+','+str(X2)+']km z/zi='+str(atzzi))
-			ax.legend()
 
 	
-def CS_m_sensitivity(X,Y,Z,data,data_mean,dsflx,TURB_COND,L_choice,chunksNOHALO,i,t,atX,path_save,path_CS1,dpi):
-	"""This procedure is looking at the sensitivity of TURB_COND conditional sampling to m
 	
 	
-	A point is considered 'turbulent' if:
-	-> for 'ITURB3'	I_turb > m*I_turb_min
-	-> for 'C10' 	sv' > m.max(std_min,std)
-		
-		with I_turb = sqrt(2/3*E) / sqrt(Um**2+Vm**2+Wm**2)
-		and I_turb_min the vertically integrated value of <I_turb>ty (see Integ_min3)
-		and std_min the vertically integrated value of <std(sv)>ty (see Integ_min3)
-		
-	INPUTS: 
-		- X 		: X dimension of the domain
-		- Y 		: Y dimension of the domain
-		- Z 		: Z dimension of the domain
-		- data		: data to build C10 file 
-		- data_mean	: mean fields
-		- dsflx 	:  dataset with mean fluxes of S1
-		- TURB_COND : 'C10' or 'ITURB3'
-		- L_choice 	: what plot to do, see OUTPUTS
-		- chunksNOHALO : chunks when halo has already been removed
-		- i 		: ni index for YZ plot (not used yet)
-		- t 		: time index for YZ plot (not used yet)
-		- atX 		: in km, where to plot mean profiles
-		- path_save : where to save the plots
-		- path_CS1	: where to save the .nc
-		- dpi 		: for the figures
-		
-	OUTPUTS:
-		if '1': profiles of fluxes at atX km
-		if '2': profiles of fluxes + top hat decomposition  at atX km
-		if '3': cover at atX km
-	"""
-	#path_save = path_save + 'test_m'+TURB_COND+'/'
-	
-	# building files for different m values
-	#  default parameters
-	param_COND = {'C10':(1,	# if C10 : strength of the conditionnal sampling (default = 1)
-				0.005),		# if C10 : set the fraction of <rv'²> under each z to detect objects (default = 0.05)
-							# if C10 and RV : m=0.3 g=1 ?
-			'ITURB':0.05,	# if ITURB : set the minimum turbulence intensity to detect objects (defaut for ref = 0.05)
-			'ITURB2':0.75,	# if ITURB2 : set the fraction of mean of Iturb under each z
-			'ITURB3':(1,0.75),# if ITURB3 : set strength of CS and minimum of turbulence, if m=1 then is ITURB2
-			'EC':0.5}		# if EC : set the fraction of mean of Ec under each z	
-	L_TURB_COND = ['C10']# 'C10','ITURB','ITURB2','EC' C10 is the threshold of Couvreux 2010
-	SVT_type = 'SVT'		# 'SVT' or 'RV' : choose which tracer to use
-	RV_DIFF = 'MEAN' 		# if RV : how rv' are computed : MEAN, MIXED, MIDDLE_MIXED. best is MIXED
-	SEUIL_ML = 0.5 			# K/km, for mixed layer detection on thtv
-	indt = -1				# time index for ref simus, -1 <=> t=+3h
-	
-	for m in [0.25,0.5]:
-		param_COND['C10'] = (m,0.005)
-		build_CS1(nhalo,data,data_mean,param_COND,L_TURB_COND,SVT_type,RV_DIFF,SEUIL_ML,indt,path_CS1)
-	
-	# data
-	dsC10 = xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO) # DATA_turb/06W_CS1_S1_C10_SVTMEAN.nc
-
-	data = {'0.25':xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN_m0.25.nc',chunks=chunksNOHALO),
-			'0.5':xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN_m0.5.nc',chunks=chunksNOHALO),
-			'1':xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)}	
-	Nc,figsize = 3,(12,6)
-	
-	ABLH = 600 	# m, ABLH of S1
-	normX = 4 	# km		
-	
-	indx = nearest(X.values,atX*1000)
-	# variables are the same, only the way turbulent structures are detetected is different
-	U,Um = dsC10.UT,dsC10.UTm
-	V,Vm = dsC10.VT,dsC10.VTm
-	W,Wm = dsC10.WT,dsC10.WTm
-	THT,THTm = dsC10.THT,dsC10.THTm
-	THTV,THTVm = dsC10.THTV,dsC10.THTVm
-	RV,RVm = dsC10.RVT,dsC10.RVTm
-	E,Em = dsC10.E,dsC10.Em
-	SV1,SV1m = dsC10.SV1,dsC10.SV1m
-	SV3,SV3m = dsC10.SV3,dsC10.SV3m
-	SV4,SV4m = dsC10.SV4,dsC10.SV4m
-	u_f = U-Um
-	v_f = V-Vm
-	w_f = W-Wm
-	thtv_f = THTV-THTVm
-	#sv1_f = SV1-SV1m
-	#sv4_f = SV4-SV4m
-	#sv3_f = SV3-SV3m
-	uw = u_f*w_f
-	wthtv = w_f*thtv_f
-	uw_mean = dsflx.FLX_UW #- dsflx.FLX_UW_s # uw_mean_tot = dsflx.FLX_UW
-	wthtv_mean = dsflx.FLX_THvW
-	Iturb = np.sqrt(2/3*E) / np.sqrt(Um**2+Vm**2+Wm**2)
-	
-	
-	indnormX = nearest(X.values,normX*1000)
-	u_star = dsC10.u_star[indnormX].values
-	Qv0 = dsC10.Qv0[indnormX].values
-	indzi = nearest(Z.values,1.1*ABLH)
-	
-	""" 0) """ # YZ plots, TBD
-	for strm in data.keys():
-		m = float(strm)
-		
-							
-	# profiles of fluxes
-	if '1' in L_choice:
-		print('profiles of uw and wthtv at X='+str(atX)+'km')
-		fig1, ax1 = plt.subplots(1,Nc,figsize = figsize,constrained_layout=True,dpi=dpi)
-		fig2, ax2 = plt.subplots(1,Nc,figsize = figsize,constrained_layout=True,dpi=dpi)
-		for k,strm in enumerate(data.keys()):
-			print('	m='+strm)
-			ds = data[strm]
-			m = float(strm)
-			obj = ds.global_objects
-			is_up = xr.where(obj==1,1,0)
-			is_sub = xr.where(obj==2,1,0)
-			is_down = xr.where(obj==3,1,0)
-			is_env = xr.where(obj==4,1,0)
-			uw_up_p,uw_sub_p,uw_down_p,uw_env_p = compute_flx_contrib(uw,[is_up,is_sub,is_down,is_env],meanDim=['time','nj'])
-			flx_summ = (uw_up_p + uw_sub_p + uw_down_p + uw_env_p ).isel(ni=indx)
-			wthtv_up_p,wthtv_sub_p,wthtv_down_p,wthtv_env_p = compute_flx_contrib(wthtv,[is_up,is_sub,is_down,is_env],meanDim=['time','nj'])	
-			flx_summ_wthtv = (wthtv_up_p + wthtv_sub_p + wthtv_down_p + wthtv_env_p ).isel(ni=indx)
-			if TURB_COND=='C10':
-				is_up2 = xr.where(obj==5,1,0)
-				is_sub2 = xr.where(obj==6,1,0)
-				uw_up_p2,uw_sub_p2 = compute_flx_contrib(uw,[is_up2,is_sub2],meanDim=['time','nj'])
-				flx_summ = flx_summ + ( uw_up_p2 + uw_sub_p2 ).isel(ni=indx)
-				flx_part_up2 	= mean_vertical_contrib((uw_up_p2).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
-				flx_part_sub2 	= mean_vertical_contrib((uw_sub_p2).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
-				wthtv_up_p2,wthtv_sub_p2 = compute_flx_contrib(wthtv,[is_up2,is_sub2],meanDim=['time','nj'])
-				flx_summ_wthtv = (wthtv_up_p2 + wthtv_sub_p2 ).isel(ni=indx)	
-				flx_part_up2 	= mean_vertical_contrib((wthtv_up_p2).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
-				flx_part_sub2 	= mean_vertical_contrib((wthtv_sub_p2).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
-			# uw
-			norm = u_star**2
-			flx_part_up 	= mean_vertical_contrib((uw_up_p).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
-			flx_part_sub 	= mean_vertical_contrib((uw_sub_p).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
-			flx_part_down 	= mean_vertical_contrib((uw_down_p).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
-			flx_part_env 	= mean_vertical_contrib((uw_env_p).isel(ni=indx),(uw_mean).isel(ni=indx),indzi).values
-			flx_obj_over_all = mean_vertical_contrib(flx_summ,(uw_mean).isel(ni=indx),indzi).values
-			# -> plot
-			ax1[k].plot( uw_up_p[:,indx]/norm,Z/ABLH	,c='red'	,label='updrafts ('		+str(np.round(flx_part_up*100,1))	+'%)')
-			ax1[k].plot( uw_sub_p[:,indx]/norm,Z/ABLH	,c='purple'	,label='sub. shells ('	+str(np.round(flx_part_sub*100,1))	+'%)')
-			ax1[k].plot( uw_down_p[:,indx]/norm,Z/ABLH,c='green'	,label='downdrafts ('	+str(np.round(flx_part_down*100,1))	+'%)')
-			ax1[k].plot( uw_env_p[:,indx]/norm,Z/ABLH	,c='grey'	,label='env ('			+str(np.round(flx_part_env*100,1))	+'%)')
-			if TURB_COND=='C10':
-				ax1[k].plot( uw_up_p2[:,indx]/norm,Z/ABLH	,c='orange'	,label='updrafts2 ('		+str(np.round(flx_part_up2*100,1))	+'%)')
-				ax1[k].plot( uw_sub_p2[:,indx]/norm,Z/ABLH	,c='pink'	,label='sub. shells2 ('	+str(np.round(flx_part_sub2*100,1))	+'%)')
-			ax1[k].plot( flx_summ[:]/norm,Z/ABLH		,c='k'		,label='all ('			+str(np.round(flx_obj_over_all*100,1))+'%)')
-			ax1[k].plot( uw_mean[:,indx]/norm,Z/ABLH	,c='k'		,label='mean',ls='--')
-			ax1[k].set_xlabel(r"$<\~ u \~ w>$/u*²")
-			ax1[k].set_ylim([0,1.2])
-			ax1[k].set_xlim([-1.5,0.3])
-			ax1[k].grid()
-			ax1[k].set_title('m='+strm,loc='right')
-			# wthv
-			norm = Qv0			
-			flx_part_up 	= mean_vertical_contrib((wthtv_up_p).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
-			flx_part_sub 	= mean_vertical_contrib((wthtv_sub_p).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
-			flx_part_down 	= mean_vertical_contrib((wthtv_down_p).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
-			flx_part_env 	= mean_vertical_contrib((wthtv_env_p).isel(ni=indx),	(wthtv_mean).isel(ni=indx),indzi).values
-			flx_obj_over_all = mean_vertical_contrib(flx_summ_wthtv,(wthtv_mean).isel(ni=indx),indzi).values
-			# -> plot
-			ax2[k].plot( wthtv_up_p[:,indx]/norm,Z/ABLH	,c='red'	,label='updrafts ('		+str(np.round(flx_part_up*100,1))	+'%)')
-			ax2[k].plot( wthtv_sub_p[:,indx]/norm,Z/ABLH	,c='purple'	,label='sub. shells ('	+str(np.round(flx_part_sub*100,1))	+'%)')
-			ax2[k].plot( wthtv_down_p[:,indx]/norm,Z/ABLH	,c='green'	,label='downdrafts ('	+str(np.round(flx_part_down*100,1))	+'%)')
-			ax2[k].plot( wthtv_env_p[:,indx]/norm,Z/ABLH	,c='grey'	,label='env ('			+str(np.round(flx_part_env*100,1))	+'%)')
-			if TURB_COND=='C10':
-				ax2[k].plot( wthtv_up_p2[:,indx]/norm,Z/ABLH	,c='orange'	,label='updrafts2 ('		+str(np.round(flx_part_up*100,1))	+'%)')
-				ax2[k].plot( wthtv_sub_p2[:,indx]/norm,Z/ABLH	,c='pink'	,label='sub. shells2 ('	+str(np.round(flx_part_sub*100,1))	+'%)')
-			ax2[k].plot( flx_summ_wthtv[:]/norm,Z/ABLH		,c='k'		,label='all ('			+str(np.round(flx_obj_over_all*100,1))+'%)')
-			ax2[k].plot( wthtv_mean[:,indx]/norm,Z/ABLH		,c='k'		,label='mean',ls='--')
-			ax2[k].set_title('m='+strm,loc='right')
-			ax2[k].set_xlabel(r"$<\~ w \~ \theta_v>$/$Q_v^*$")
-			ax2[k].set_ylim([0,1.2])
-			ax2[k].set_xlim([-1.1,3.5])
-			ax2[k].grid()
-			ax1[k].legend(loc='upper left')
-			ax2[k].legend(loc='upper right')
-		ax1[0].set_ylabel('z / <zi>x')
-		ax2[0].set_ylabel('z / <zi>x')
-		fig1.savefig(path_save+'turbulent_fluxes_uw_x'+str(atX)+'km.png')
-		fig2.savefig(path_save+'turbulent_fluxes_wthtv_x'+str(atX)+'km.png')
-	
-	
-				
-	if '2' in L_choice:
-		print('profiles of uw and wthtv at X='+str(atX)+'km, with tophat decomposition for up/down/other')
-		color = {'up':'red',
-				'down':'green',
-				'other':'blue'}
-				
-		# linestyles is same length as number of m tested
-		if TURB_COND=='ITURB3':
-			# ls = ['-','--',(5, (10, 3)),'-.',':',] if 5 values of m
-			ls = ['-','--','dotted'] # if 3 values of m
-		elif TURB_COND=='C10':
-			ls = ['dotted','--','-'] 	
-		
-		fig, ax = plt.subplots(1,2,figsize = (7,5),constrained_layout=True,dpi=dpi)
-		N = len(data.keys())
-		for k,strm in enumerate(data.keys()):
-			print('	m='+strm)
-			ds = data[strm]
-			m = float(strm)
-			obj = ds.global_objects
-			is_up = xr.where(obj==1,1,0)
-			is_sub = xr.where(obj==2,1,0)
-			is_down = xr.where(obj==3,1,0)
-			is_env = xr.where(obj==4,1,0)
-			if TURB_COND=='C10':
-				is_up = np.logical_or( xr.where(obj==1,1,0),xr.where(obj==5,1,0) )
-			# uw
-			norm = u_star**2
-			is_other = np.logical_not( np.logical_or(is_up,is_down) )
-			d_str = {'up':is_up,'down':is_down,'other':is_other}
-			# splitting into top hat and intra variability
-			TopH,Intra = {},{}
-			summ= xr.zeros_like(uw_mean)
-			for structure in d_str.keys():
-				Ui = U.where(d_str[structure]==1).mean(dim=['time','nj'])
-				Wi = W.where(d_str[structure]==1).mean(dim=['time','nj'])
-				alphai = d_str[structure].mean(dim=['time','nj']) 
-				TopH[structure] = alphai * (Ui-Um[0,:,0,:])*Wi
-				Intra[structure] = alphai * ( (U-Ui)*(W-Wi) ).where(d_str[structure]==1).mean(dim=['time','nj'])
-				summ = summ + TopH[structure] + Intra[structure]
-			for structure in d_str.keys():
-				if m==1:
-					ax[0].plot( TopH[structure][:,indx]/u_star**2,Z/ABLH,c=color[structure] ,ls=ls[k],label=structure)
-				else:
-					ax[0].plot( TopH[structure][:,indx]/u_star**2,Z/ABLH,c=color[structure] ,ls=ls[k])
-				ax[1].plot( Intra[structure][:,indx]/u_star**2,Z/ABLH,c=color[structure] ,ls=ls[k])
-		ax[0].plot(uw_mean[:,indx]/u_star**2,Z/ABLH,c='k',label='mean')
-		ax[1].plot(uw_mean[:,indx]/u_star**2,Z/ABLH,c='k',label='mean')	
-		ax[0].set_title('Top-hat')
-		ax[1].set_title('Intra-variability')
-		ax[0].set_xlabel(r"$<\~ u \~ w>$/u*²")
-		ax[1].set_xlabel(r"$<\~ u \~ w>$/u*²")
-		ax[0].set_ylabel(r'z/z$_i$')
-		ax[0].legend()
-		for axe in ax:
-			axe.set_ylim([0,1.2])
-			axe.set_xlim([-1.5,0.3])
-			axe.xaxis.set_major_locator(MultipleLocator(0.5))
-			axe.grid()
-			axe.xaxis.label.set_fontsize(13)
-			axe.yaxis.label.set_fontsize(13)
-		# saving	
-		fig.savefig(path_save+'turbulent_fluxes_uw_x'+str(atX)+'km_tophat.png')
-		
-	if '3' in L_choice:
-		print('profiles of objet covers')
-		fig1, ax1 = plt.subplots(1,Nc,figsize = figsize,constrained_layout=True,dpi=dpi)
-		for k,strm in enumerate(data.keys()):
-			print('	m='+strm)
-			ds = data[strm]
-			m = float(strm)
-			obj = ds.global_objects
-			is_up = xr.where(obj==1,1,0)
-			is_sub = xr.where(obj==2,1,0)
-			is_down = xr.where(obj==3,1,0)
-			is_env = xr.where(obj==4,1,0)
-			F_up = is_up.mean(dim=['time','nj']) 
-			F_sub = is_sub.mean(dim=['time','nj']) 
-			F_down = is_down.mean(dim=['time','nj'])  
-			F_env = is_env.mean(dim=['time','nj']) 
-			summ = F_up+F_sub+F_down+F_env
-			if TURB_COND=='C10':
-				is_up2 = xr.where(obj==5,1,0)
-				is_sub2 = xr.where(obj==6,1,0)
-				F_up2 = is_up2.mean(dim=['time','nj']) 
-				F_sub2 = is_sub2.mean(dim=['time','nj']) 
-				summ = summ + F_up2+F_sub2
-			ax1[k].plot( F_up[:,indx],Z/ABLH	,c='red',label='updrafts')
-			ax1[k].plot( F_sub[:,indx],Z/ABLH	,c='purple',label='sub. shells')
-			ax1[k].plot( F_down[:,indx],Z/ABLH	,c='green',label='downdrafts')
-			ax1[k].plot( F_env[:,indx],Z/ABLH	,c='grey',label='env')
-			if TURB_COND=='C10':
-				ax1[k].plot( F_up2[:,indx],Z/ABLH	,c='orange',label='updrafts2')
-				ax1[k].plot( F_sub2[:,indx],Z/ABLH	,c='pink',label='sub. shells2')
-			ax1[k].plot( summ[:,indx],Z/ABLH	,c='k',label='total of obj')
-			ax1[k].set_ylim([0,1.2])
-			ax1[k].grid()
-			ax1[k].set_title('m='+strm,loc='right')
-		ax1[0].set_ylabel('z/zi')
-		ax1[0].legend()
-		fig1.savefig(path_save+'cover_x'+str(atX)+'km.png')
-	
-	
-	
-def updraft_charateristics(X,Z,dsCS1,dsCS1warm,dsCS1cold,dataSST,crit_value,Tstart,Tstop,window,BLIM,L_atX,K,path_saving,dpi):
-	"""Plots buoyancy, w' and u' inside updrafts from the conditionaly sampled updraft by C10.
-		
-		INPUTS:
-			- TBD
-		
-	"""
-	indt = -1 # last time for ref files
-	path_save2 = path_saving+'C10_m'+str(dsCS1.attrs['mCS'])+'_g'+str(dsCS1.attrs['gammaRv']*100) + '_SVT/S1/'
-	if not os.path.isdir(path_save2): # creat folder if it doesnt exist
-		os.makedirs(path_save2)
-	
-	cmap_warm ='Reds'
-	cmap_cold ='winter'
-	colorsX = DISCRETIZED_2CMAP_2(cmap_cold,cmap_warm,L_atX*1000,dataSST,crit_value,X.values)	
-	
-	L_indx = []
-	for x in L_atX:
-		L_indx.append(nearest(X.values,x*1000))		
-	
-	# Variables
-	is_up = xr.where(dsCS1.global_objects==1,1,0)	
-	is_up_refW = xr.where(dsCS1warm.global_objects==1,1,0)	
-	is_up_refC = xr.where(dsCS1cold.global_objects==1,1,0)
-	is_up = np.logical_or(is_up,xr.where(dsCS1.global_objects==5,1,0))
-	F_up = MeanTurb(is_up,Tstart,Tstop,window)
-	F_up_warm = is_up_refW.mean(dim=['ni','nj'])
-	F_up_cold = is_up_refC.mean(dim=['ni','nj'])
-	# BUOYANCY
-	# -> S1
-	THTV = dsCS1.THTV
-	THTV_up = MeanTurb(THTV.where(is_up==True),Tstart,Tstop,window)
-	THTV_ref = MeanTurb(THTV,Tstart,Tstop,window)
-	B = g*(THTV_up/THTV_ref - 1)
-	# -> warm ref
-	THTV_warm = dsCS1warm.THTV
-	THTV_up_warm = THTV_warm.where(is_up_refW==1).mean(dim=['ni','nj'])
-	THTV_ref_warm = THTV_warm.mean(dim=['ni','nj'])
-	ABLH_warm = Z[THTV_warm.mean(dim=['ni','nj']).differentiate('level').argmax().values].values
-	B_warm = g*(THTV_up_warm/THTV_ref_warm - 1)
-	# -> cold ref
-	THTV_cold = dsCS1cold.THTV
-	THTV_up_cold = THTV_cold.where(is_up_refC==1).mean(dim=['ni','nj'])
-	THTV_ref_cold = THTV_cold.mean(dim=['ni','nj'])
-	ABLH_cold = Z[THTV_cold.mean(dim=['ni','nj']).differentiate('level').argmax().values].values
-	B_cold = g*(THTV_up_cold/THTV_ref_cold - 1)
-	# FLUCTUATIONS in updrafts
-	# -> S1
-	W_up = MeanTurb( (dsCS1.WT-dsCS1.WTm).where(is_up), Tstart,Tstop,window)
-	U_up = MeanTurb( (dsCS1.UT-dsCS1.UTm).where(is_up), Tstart,Tstop,window)
-	# -> warm ref
-	W_up_w = (dsCS1warm.WT-dsCS1warm.WTm).where(is_up_refW).mean(dim=['ni','nj'])
-	U_up_w = (dsCS1warm.UT-dsCS1warm.UTm).where(is_up_refW).mean(dim=['ni','nj'])
-	# -> cold ref
-	W_up_c = (dsCS1cold.WT-dsCS1cold.WTm).where(is_up_refC).mean(dim=['ni','nj'])
-	U_up_c = (dsCS1cold.UT-dsCS1cold.UTm).where(is_up_refC).mean(dim=['ni','nj'])
-	
-	# PLOT
-	fig, ax = plt.subplots(1,3,figsize = (10,5),constrained_layout=True,dpi=dpi)	
-	# -> Buoyancy 
-	ax[0].vlines(0,0,3,colors='grey',alpha=0.5)
-	ax[0].plot(np.ma.masked_where(F_up_cold<=K,B_cold)*1000,Z/ABLH_cold,c='blue',label='ref: cold',ls='--')
-	ax[0].plot(np.ma.masked_where(F_up_warm<=K,B_warm)*1000,Z/ABLH_warm,c='red',label='ref: warm',ls='--')
-	for kx,indx in enumerate(L_indx):
-		ax[0].plot(np.ma.masked_where(F_up.isel(ni=indx)<=K,B.isel(ni=indx))*1000,Z/ABLH_S1,c=colorsX[kx],label='X='+str(L_atX[kx])+'km')
-	ax[0].legend()
-	#ax[0].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-	#ax[0].xaxis.major.formatter._useMathText = True
-	ax[0].set_ylabel(r'z/z$_i$')
-	ax[0].set_xlabel(r'g.(<$\theta_v$>$_{up}$/$<\theta_v>$-1)') # (10$^{-3}$ m.s$^{-2}$)
-	ax[0].set_xlim(BLIM)
-	# -> W
-	ax[1].plot( np.ma.masked_where(F_up_warm<=K,W_up_w),Z/ABLH_warm,c='r',label='ref: warm',ls='--')
-	ax[1].plot( np.ma.masked_where(F_up_cold<=K,W_up_c),Z/ABLH_cold,c='b',label='ref: cold',ls='--')
-	for kx,indx in enumerate(L_indx):
-		ax[1].plot( np.ma.masked_where(F_up.isel(ni=indx)<=K,W_up.isel(ni=indx)), Z/ABLH_S1,c=colorsX[kx],label='S1 x='+str(L_atX[kx])+'km')
-	ax[1].set_xlabel(r"$\~w_{up}$") #  (m.s$^{-1}$)
-	ax[1].set_xlim([-0.05,0.75])
-	#ax[1].tick_params(axis='both',labelleft=False)
-	# -> U
-	ax[2].plot( np.ma.masked_where(F_up_warm<=K,U_up_w),Z/ABLH_warm,c='r',label='ref: warm',ls='--')
-	ax[2].plot( np.ma.masked_where(F_up_cold<=K,U_up_c),Z/ABLH_cold,c='b',label='ref: cold',ls='--')
-	for kx,indx in enumerate(L_indx):
-		ax[2].plot( np.ma.masked_where(F_up.isel(ni=indx)<=K,U_up.isel(ni=indx)), Z/ABLH_S1,c=colorsX[kx],label='S1 x='+str(L_atX[kx])+'km')
-	ax[2].set_xlabel(r"$\~u_{up}$") #  (m.s$^{-1}$)
-	ax[2].set_xlim([-0.75,0.05])
-	#ax[2].tick_params(axis='both',labelleft=False)
-	
-	for axe in ax.flatten():
-		axe.set_ylim([0,1.2])
-		axe.grid()	
-		axe.xaxis.label.set_fontsize(13)
-		axe.yaxis.label.set_fontsize(13)
-		
-	fig.savefig(path_save2+'Updrafts_characteristics.png')
-
-
-
-
-def uw_decomposition_10_13_23_km(X,Z,dsCS1,dsref,dsflx,L_atX,PLOT_REF,PLOT_CONTRIB,path_saving,dpi):
-	"""This procedure is plotting the uw flux decomposition by the conditional sampling C10
-	
-	INPUTS :
-		TBD
-	"""
-
-	indt_c = -1
-	indt_w = -1
-	l_indx = [nearest(X.values,atx*1000) for atx in L_atX]
-	indzi = nearest(Z.values,1.1*ABLH_S1)
-	# saving path
-	path_save2 = path_saving+'C10_m'+str(dsCS1.attrs['mCS'])+'_g'+str(dsCS1.attrs['gammaRv']*100) + '_SVT/S1/'
-	if not os.path.isdir(path_save2): # creat folder if it doesnt exist
-		os.makedirs(path_save2)
-	# normalization	
-	normX = 4 # km
-	indnormX = nearest(X.values,normX*1000)
-	u_star = dsCS1.u_star[indnormX].values #  = 0.211
-	# Flux profiles	
-	u_fluc = dsCS1.UT - dsCS1.UTm
-	w_fluc = dsCS1.WT - dsCS1.WTm
-	uw = u_fluc*w_fluc
-	uw_mean= uw.mean(dim=['time','nj']).compute()
-	uw_mean_tot = dsflx.FLX_UW
-	Ones = xr.ones_like(u_fluc)
-	Zeros = xr.zeros_like(u_fluc)
-	is_up = xr.where( dsCS1.global_objects==1,Ones,Zeros)
-	is_sub = xr.where( dsCS1.global_objects==2,Ones,Zeros )
-	is_down = xr.where( dsCS1.global_objects==3,Ones,Zeros )
-	is_env = xr.where( dsCS1.global_objects==4,Ones,Zeros )
-	is_up2 = xr.where( dsCS1.global_objects==5,Ones,Zeros )
-	is_sub2 = xr.where( dsCS1.global_objects==6,Ones,Zeros )	
-	uw_mean= uw.mean(dim=['time','nj']).compute()
-	uw_mean_tot = dsflx.FLX_UW
-	uw_up_p,uw_sub_p,uw_up_p2,uw_sub_p2,uw_down_p,uw_env_p = compute_flx_contrib(uw,[is_up,is_sub,is_up2,is_sub2,is_down,is_env],meanDim=['time','nj'])
-	flx_summ = (uw_up_p + uw_sub_p + uw_up_p2 + uw_sub_p2 + uw_down_p + uw_env_p ).isel(ni=l_indx)
-	# vertically integrated contributions
-	flx_part_up 	= mean_vertical_contrib((uw_up_p).isel(ni=l_indx),(uw_mean).isel(ni=l_indx),indzi).values
-	flx_part_sub 	= mean_vertical_contrib((uw_sub_p).isel(ni=l_indx),(uw_mean).isel(ni=l_indx),indzi).values
-	flx_part_up2 	= mean_vertical_contrib((uw_up_p2).isel(ni=l_indx),(uw_mean).isel(ni=l_indx),indzi).values
-	flx_part_sub2 	= mean_vertical_contrib((uw_sub_p2).isel(ni=l_indx),(uw_mean).isel(ni=l_indx),indzi).values
-	flx_part_down 	= mean_vertical_contrib((uw_down_p).isel(ni=l_indx),(uw_mean).isel(ni=l_indx),indzi).values
-	flx_part_env 	= mean_vertical_contrib((uw_env_p).isel(ni=l_indx),(uw_mean).isel(ni=l_indx),indzi).values
-	flx_obj_over_all = mean_vertical_contrib(flx_summ,(uw_mean).isel(ni=l_indx),indzi).values
-	
-	# PLOT
-	fig, ax = plt.subplots(1,3,figsize = (10,5),constrained_layout=True,dpi=dpi)
-	for i,indx in enumerate(l_indx):
-		norm = u_star**2
-		if PLOT_REF: # if True, plots the uw profils from references
-			uw_c = dsref['cold']['nomean']['Resolved']['RES_WU'][indt_c,:] + dsref['cold']['nomean']['Subgrid']['SBG_WU'][indt_c,:] 
-			uw_w = dsref['warm']['nomean']['Resolved']['RES_WU'][indt_c,:] + dsref['warm']['nomean']['Subgrid']['SBG_WU'][indt_c,:]
-			gTHTV_w = Compute_THTV( dsref['warm']['nomean']['Mean']['MEAN_TH'],
-									dsref['warm']['nomean']['Mean']['MEAN_RV'])[indt_w].differentiate('level_les')
-			gTHTV_c = Compute_THTV( dsref['cold']['nomean']['Mean']['MEAN_TH'],
-									dsref['cold']['nomean']['Mean']['MEAN_RV'])[indt_c].differentiate('level_les')
-			zi_c,  zi_w = ( Z[gTHTV_c.argmax('level_les').values].values, 
-							Z[gTHTV_w.argmax('level_les').values].values )
-			ax[i].plot( -uw_c/uw_c[0],Z/zi_c, c='b', label='mean refC')
-			ax[i].plot( -uw_w/uw_w[0],Z/zi_w, c='r', label='mean refW')
-		if PLOT_CONTRIB: # if False, plot only the total contribution of coherent structures
-			ax[i].plot( uw_up_p[:,indx]/norm,Z/ABLH_S1	,c='red'	,label='up ('		+str(np.round(flx_part_up[i]*100,1))	+'%)')
-			ax[i].plot( uw_sub_p[:,indx]/norm,Z/ABLH_S1	,c='purple'	,label='ss ('	+str(np.round(flx_part_sub[i]*100,1))	+'%)') # sub. shells
-			ax[i].plot( uw_up_p2[:,indx]/norm,Z/ABLH_S1	,c='orange'	,label='up 2 ('	+str(np.round(flx_part_up2[i]*100,1))	+'%)')
-			ax[i].plot( uw_sub_p2[:,indx]/norm,Z/ABLH_S1,c='pink'	,label='ss 2 ('+str(np.round(flx_part_sub2[i]*100,1))	+'%)')
-			ax[i].plot( uw_down_p[:,indx]/norm,Z/ABLH_S1,c='green'	,label='down ('	+str(np.round(flx_part_down[i]*100,1))	+'%)')
-			#ax[i].plot( uw_env_p[:,indx]/norm,Z/ABLH_S1,c='grey'	,label='env ('			+str(np.round(flx_part_env[i]*100,1))	+'%)')
-			ax[i].plot( flx_summ[:,i]/norm,Z/ABLH_S1	,c='k'		,label='all ('			+str(np.round(flx_obj_over_all[i]*100,1))+'%)')
-		#ax[i].plot( uw_mean[:,indx]/norm,Z/ABLH_S1	,c='k'		,label='mean',ls='--') # only resolved flux
-		ax[i].plot( uw_mean_tot[:,indx]/norm,Z/ABLH_S1	,c='k'		,label='mean S1',ls='--')
-		ax[i].set_title("X="+str(L_atX[i])+"km",loc='right')
-		ax[i].set_xlabel("$<\~ u \~ w>$/u*²")
-		ax[i].legend(loc='upper left')
-		ax[i].set_ylim([0,1.2])
-		ax[i].set_xlim([-1.5,0.3])
-		ax[i].grid(True)
-		ax[i].xaxis.label.set_fontsize(13)
-		ax[i].yaxis.label.set_fontsize(13)
-	ax[0].set_ylabel(r'z/z$_i$')
-	fig.savefig(path_save2+'uw_flux_decomposition_10_13_23_km.png')
-
-
-
-
-
 
 
 

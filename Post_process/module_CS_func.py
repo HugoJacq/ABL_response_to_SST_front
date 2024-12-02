@@ -1,7 +1,6 @@
 # To be used with module_CS.py 
 import xarray as xr
 import numpy as np
-import os
 import matplotlib.pyplot as plt
 
 from module_cst import *
@@ -227,15 +226,13 @@ def get_mixed_layer_indexes(Z,gthtv,SEUIL):
 
 	return indz1,indz2
 	
-def Compute_bool_turb(dim,COND,param_COND,X,Y,Z,ABLH,SV,SVm,U,V,W,Um,Vm,Wm,E,Em):
+def Compute_bool_turb(dim,COND,param_COND,Z,SV,SVm,U,V,W,Um,Vm,Wm,E,Em):
 	"""
 	Given COND, detects where there is a turbulent coherent structure
 	
 		- COND	: 'C10','ITURB','ITURB2','EC'
 		- param_COND : dic with parameteres corresponding to COND
-		- X,Y,Z : spatial dimensions of the instantaneous file
-		- ABLH : height of boundary layer (same shape as SV)
-				see Integ_min
+		- Z : spatial dimensions of the mean file
 		- SV	: passive scalar for C10
 		- SVm	: mean of passive scalar for C10 (same shape as SV)
 		- U,V,W,E : instantaneous wind and total TKE
@@ -309,8 +306,7 @@ def mean_vertical_contrib(flx_i,flx_mean,indzi):
 	"""
 	#return np.abs(flx_i.isel(level=slice(2,indzi))).mean(dim='level') / np.abs(flx_mean.isel(level=slice(2,indzi))).mean(dim='level')
 	return np.abs(flx_i.isel(level=slice(2,indzi))).integrate('level') / np.abs(flx_mean.isel(level=slice(2,indzi))).integrate('level')
-	
-	
+		
 def compute_alpha(mask,keepdim={'Z'}):
 	"""
 	This function compute the area coverage of the 'mask'
@@ -362,39 +358,4 @@ def compute_std_flx(flx,L_mask,stdDim=['ni','nj']):
 		flx_i_std = flx.where(mask).std(dim=stdDim,skipna=True,ddof=1)
 		L_out.append( flx_i_std )
 	return tuple(flx_i_std for flx_i_std in L_out)
-	
-def compute_beta(alpha,L_ab,mask):
-	"""This function compute the top-hat contribution to total variance
-		of the flux <a'b'> from coherent structure s
-		
-		<a'b'> = sum_on_s[beta_s] + sum_on_s[gamma_s]
-		
-			beta_s = alpha_s * (a_s - <a>) * (b_s - <b>)
-				
-				with ab_s the ab flux where object s is present
-		
-		see eq14 of Chinita2018 'A JPDF-based decomposition of turbulence in the atmospheric boundary layer
-		
-		- alpha : area fraction of the object
-		- L_ab : list of the fluxes ab for object considered
-		- mask of the object considered
-	"""	
-	# this has to be done
-	
-	
-def compute_beta(alpha,ab):
-	"""This function compute the top-hat contribution to total variance
-		of the flux <a'b'> from coherent structure s
-		
-		<a'b'> = sum_on_s[beta_s] + sum_on_s[gamma_s]
-		
-			gammas = alpha_s * a'b'_s
-		
-		see eq14 of Chinita2018 'A JPDF-based decomposition of turbulence in the atmospheric boundary layer
-		
-		- alpha_s : area fraction of object s
-		- a'b' : total flux (resolved)
-	"""		
-	# this has to be done
-	
 

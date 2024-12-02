@@ -4,7 +4,10 @@
  	
  * Execution : python3 analyse.py
  
- Hugo Jacquet August 2024
+ Hugo Jacquet 
+ 	- August 2024: creation
+	- December 2024: review 1 revision
+
 ##########################################
 """
 
@@ -16,21 +19,11 @@ warnings.filterwarnings('ignore')
 import os
 import pathlib
 import numpy as np
-import scipy as sp
 import xarray as xr
-from scipy import signal
-from scipy.ndimage import uniform_filter1d,gaussian_filter
-import pandas as pd
 import time
-
 # plot related
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from matplotlib import colors as c
-from matplotlib.ticker import Locator
-# for 3D plots
-from skimage.measure import marching_cubes
-from pyevtk.hl import *
 # custom functions
 from module_building_files 	import *
 from module_budget 			import *	
@@ -45,26 +38,20 @@ from dask.distributed import Client,LocalCluster
 
 # ===================================================
 # Figure selector
-# ---------
 BUILD = True
-NUM_FIG = -1 # number from 1 to 11, or 'A1' or 'S1' or -1 for all figures
-#pathWORKDIR = '/mnt/60df13e6-86a2-4cac-b207-817433cddfe5/WORKDIR2/56MNH/simu_paper_clean_HighRes/'
-pathWORKDIR = '/home/jacqhugo/files_for_zenodo_CanalSim/DATA/'
-abs_path = '/home/jacqhugo/scripts/simu_canal_across_paper/'
-# ---------
+DASHBOARD = False 	# set to 'False' when building files.
+NUM_FIG = 1  		# number from 1 to 11, or 'A1' or 'S1' or -1 for all figures
+
+#pathWORKDIR = '/home/jacqhugo/files_for_zenodo_CanalSim/canal_sim_submitted/DATA/'
+pathWORKDIR = '/home/jacqhugo/files_for_zenodo_CanalSim/canal_sim_rev1/DATA/'
+
+#abs_path = '/home/jacqhugo/scripts/simu_canal_across_paper/'
+abs_path = '/home/jacqhugo/scripts/simu_canal_across_paper_rev1/'
 # ===================================================
 
-if NUM_FIG==-1:
-	print('I will print every figures from paper')
-else:
-	print('I will print figure number '+str(NUM_FIG))
-os.system('ln -sf '+pathWORKDIR+'S1/ .')
-os.system('ln -sf '+pathWORKDIR+'RefC/ .')
-os.system('ln -sf '+pathWORKDIR+'RefW/ .')
-
-if __name__ == "__main__":  # This avoids infinite subprocess creation
+if __name__ == "__main__":  # This avoids infinite subprocess creation	
 	
-	if False:
+	if DASHBOARD:
 		# sometimes dask cluster can cause problems "memoryview is too large"
 		# (writing a big netcdf file for eg, hbudget_file)
 		cluster = LocalCluster(n_workers=8)
@@ -83,20 +70,25 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 	mpl.rcParams['ytick.minor.width'] = 1
 	
 	
-	
+	if NUM_FIG==-1:
+		print('I will print every figures from paper')
+	else:
+		print('I will print figure number '+str(NUM_FIG))
+	os.system('ln -sf '+pathWORKDIR+'S1/ .')
+	os.system('ln -sf '+pathWORKDIR+'RefC/ .')
+	os.system('ln -sf '+pathWORKDIR+'RefW/ .')
 	
 	# ===================================================
 	# data opening, file structure
 	# ===================================================
 	# INPUT----
-	CHOIX = 'S1'
-	dpi = 200
-	res = 50 # dx=dy, in meters
-	nhalo = 1
+	CHOIX = 'S1_Ly8km' 	# 'S1' or 'S1_Ly8km'
+	dpi = 200 			# for figures
+	res = 50 			# dx=dy, in meters
+	nhalo = 1 			# MNH JPHEXT
 	# ---------
 	print('Case is : '+CHOIX)
 	print(' * Reading files...')
-	
 	
 	# dask related
 	ChunksT = 10
@@ -104,52 +96,58 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 	ChunksX = 770
 	ChunksY = 21
 	chunksOUT = {'time':-1,
-				'level':81,
+				'level':81,	
 				'level_w':81,
 				'nj':21,
 				'nj_u':21,
 				'nj_v':21,
-				'ni':770,
-				'ni_u':770,
-				'ni_v':770}		
-	chunksNOHALO = {'time':10,
+				'ni':-1,
+				'ni_u':-1,
+				'ni_v':-1}		
+	chunksNOHALO = {'time':-1,
 				'level':16,
 				'level_w':16,
-				'nj':20,
-				'nj_u':20,
-				'nj_v':20,
-				'ni':768,
-				'ni_u':768,
-				'ni_v':768}
+				'nj':21,
+				'nj_u':21,
+				'nj_v':21,
+				'ni':-1,
+				'ni_u':-1,
+				'ni_v':-1}
+	chunksNOHALO_interp = {'time':-1,
+				'level':16,
+				'nj':21,
+				'ni':-1}
 	
-	path_BACKUP = {'S1':pathWORKDIR+'S1/'}
-	path_OUT = {'S1':pathWORKDIR+'S1/FICHIERS_OUT/'}
-	path_BUDGET = {'S1':''}
-	L_BUDGET = {'S1':''}
-	L_OUT = {'S1':'CAS06.1.002.OUT*'}
-	L_BACKUP ={'S1':[path_BACKUP[CHOIX]+'CAS06.1.002.002.nc'],
-				'cold':abs_path+'RefC/CAS09.1.001.003.nc',
-				'warm':abs_path+'RefW/CAS10.1.001.003.nc'}
+	path_BACKUP = { # 'S1':pathWORKDIR+'S1/',
+					'S1_Ly8km':pathWORKDIR+'S1/'}
+	path_OUT = { #'S1':pathWORKDIR+'S1/FICHIERS_OUT/',
+			 'S1_Ly8km':pathWORKDIR+'S1/FICHIERS_OUT/'}
+	path_BUDGET = { #'S1':'',
+				'S1_Ly8km':''}
+	L_BUDGET = { # 'S1':'',
+				'S1_Ly8km':''}
+	L_OUT = {#'S1':'CAS06.1.002.OUT*',
+		  	'S1_Ly8km':'CAS06.1.002.OUT*'}
+	L_BACKUP ={#'S1':[path_BACKUP[CHOIX]+'CAS06.1.002.002.nc'],
+			'S1_Ly8km':[path_BACKUP[CHOIX]+'CAS06.1.002.002_comp.nc'],
+			'cold':pathWORKDIR+'RefC/CAS09.1.001.003_comp.nc',
+			'warm':pathWORKDIR+'RefW/CAS10.1.001.003_comp.nc'
+			}
 	L_var_budget = ['UU','VV','WW','RC','RhodJ','RR','RV','TH','TK']
 	group = 'Budgets/'
-	path_INI = {'S1':abs_path+'S1/INIT_CANAL_SST.nc'}
+	path_INI = {#'S1':abs_path+'S1/INIT_CANAL_SST.nc',
+			 	'S1_Ly8km':pathWORKDIR+'S1/INIT_CANAL_SST.nc'}
 
 	# This is for the reference sims	
-	path_ref = {'cold':abs_path+'RefC/CAS09.1.001.000.nc',	# this has SST=296.55K=Ta_ini
-		'warm':abs_path+'RefW/CAS10.1.001.000.nc'}			# this has SST=298.05K=Ta_ini+1.5K
-	nameGroups = { 'nameKE' : 'LES_budgets/BU_KE/Cartesian/',
-			'nameMean' : 'LES_budgets/Mean/Cartesian/',
-			'nameResolved' : 'LES_budgets/Resolved/Cartesian/',
-			'nameSGS' : 'LES_budgets/Subgrid/Cartesian/',
-			'nameSurface' : 'LES_budgets/Surface/Cartesian/',
-			'nameMisc' : 'LES_budgets/Miscellaneous/Cartesian/',
-			'meaned' : 'Time_averaged/Not_normalized/cart/',
-			'notmeaned' : 'Not_time_averaged/Not_normalized/cart/'}
+	path_ref = {
+			'cold':pathWORKDIR+'RefC/CAS09.1.001.000.nc',	
+			'warm':pathWORKDIR+'RefW/CAS10.1.001.000.nc'
+			}
+
 	# Opening files
-	dsB,dsO,dsBU,ds000,dsINI,dsref = Opening_files(chunksOUT,abs_path,path_BACKUP,path_OUT,path_BUDGET,L_BUDGET,L_OUT,L_BACKUP,L_var_budget,group,path_INI,CHOIX,
-					path_ref,nameGroups)
+	dsB,dsO,dsBU,ds000,dsINI,dsref = Opening_files(chunksOUT,path_OUT,path_BUDGET,L_BUDGET,L_OUT,L_BACKUP,L_var_budget,group,path_INI,CHOIX,
+					path_ref)
 	print('	done!')
-	
 	# naming save path
 	Name_out = CHOIX + '_'
 	path_outpng = './PNG_'+CHOIX+'/' # './'
@@ -204,11 +202,9 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 		name_hbudget = 'DATA_turb/'+CHOIX+'_budget_fields.nc'
 		if not pathlib.Path(name_hbudget).is_file() and not CHOIX==EXCLUDE: 
 			print(' * Building budget file')
-			Build_budget_file(path_OUT[CHOIX],path_INI[CHOIX],dsB,dsO,dsmean,Tstart,Tstop,name_hbudget,nhalo,window)
+			Build_budget_file(path_OUT[CHOIX],path_INI[CHOIX],dsB,dsO,dsmean,Tstart,Tstop,name_hbudget,nhalo,window) # this is about 30min
 		ds_hbudget = xr.open_dataset(name_hbudget,chunks=chunksNOHALO)
 		# building quadrant analysis file for sim with front
-		# 	following "On the Nature of the Transition Between Roll and
-		# 	Cellular Organization in the Convective Boundary Layer" Salesky 2016
 		name_quadrant = 'DATA_turb/'+CHOIX+'_quadrants_fields.nc'
 		if not pathlib.Path(name_quadrant).is_file() and not CHOIX==EXCLUDE: 
 			print(' * Building quadrant analysis file')
@@ -229,11 +225,10 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 			file_for_quad_warm = xr.open_dataset(chemin_warm)
 			Build_Quadrants_terms(chemin_warm,file_for_quad_warm,dsref['warm'],name_quadrant_warm,nhalo)
 		ds_quadrant_warm = xr.open_dataset(name_quadrant_warm,chunks=chunksNOHALO)
-		
+				
 	# ===================================================
 	# Fig.1,2,3 First look
 	# ===================================================
-
 	if NUM_FIG==1 or NUM_FIG==2 or NUM_FIG==3 or NUM_FIG==-1:
 		print(' * First look')
 		# this is in paper
@@ -241,28 +236,37 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 		height = 300 #m
 		path_save = path_outpng+Name_out
 		FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,crit_value,path_save,dpi)
-
 	# ===================================================
 	# Fig.4 THTV and flux wthtv
 	# 	    U and flux uw
 	# ===================================================
 	if NUM_FIG==4 or NUM_FIG==-1:
+		path_save = path_outpng+Name_out
+		#X_liste = [4000,10000,13000,23000,26000,38000] # (m)
+		if CHOIX=='S1':
+			X_liste = np.array([4.0,10.0,13.0,23.0,26.0,38.0])*1000 
+		elif CHOIX=='S1_Ly8km':
+			X_liste = np.array([4.0,8.5,11.5,23.0,26.0,38.0])*1000 
+		NORM = True 	# (bool) norm w'tht' with Q* at 'Q0_atX' m
 		# to do : w'thtv' (résolus + sgs) à coté des profils moyens (enlever les profils du dernier instant)
 		print(' * Theta_v and fluxes at differents positions')
 		Q0_atX = 4000 	# (m) X location to chose to normalize
-		NORM = True 	# (bool) norm w'tht' with Q* at 'Q0_atX' m
-		X_liste = [4000,10000,13000,23000,26000,38000] # (m)
-		#X_liste = [4000,7500,15000,20000,26000,38000]
-		path_save = path_outpng+Name_out
-		PROFILES_AT_X_THTV_THVWFLX(dataSST,dsflx,dsmean,dsref,res,X,Z,X_liste,Q0_atX,NORM,crit_value,path_save,dpi)
+		PROFILES_AT_X_THTV_THVWFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,Q0_atX,NORM,crit_value,path_save,dpi)
 		#
 		#-------------------------------------
 		print(' * U and fluxes at differents positions')
 		ustar_atX = 4000 	# (m) X location to chose to normalize
-		NORM = True 		# (bool) norm u'w' with u*² at 'ustar_atX' m
-		X_liste = [4000,10000,13000,23000,26000,38000] # (m)
-		path_save = path_outpng+Name_out
 		PROFILES_AT_X_U_UWFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,ustar_atX,NORM,crit_value,path_save,dpi)
+		#
+		#-------------------------------------
+		print(' * Rv and fluxes at differents positions')
+		E0_atX = 4000 	# (m) X location to chose to normalize
+		PROFILES_AT_X_RV_WRVFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,ustar_atX,NORM,crit_value,path_save,dpi)
+		#
+		#-------------------------------------
+		print(' * THT and fluxes at differents positions')
+		Q0_atX = 4000 	# (m) X location to chose to normalize
+		PROFILES_AT_X_THT_THWFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,ustar_atX,NORM,crit_value,path_save,dpi)
 		#
 		#-------------------------------------
 	# ===================================================
@@ -272,7 +276,7 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 		print(' * Budgets')
 		print('	- Budgets terms function of position x')
 		#
-		height = [10,120,300,540] # in meters, good for paper : [540,300,120,10], must be 4 items
+		height = [10,120,300,540] # in meters, good for paper : [10,120,300,540], must be 4 items
 		factor = 10000
 		VAR_BU = {'u':['u_cor','u_hadv','u_hturb','u_pres','u_vadv','u_vturb'],
 			'v':['v_cor','v_hadv','v_hturb','v_vadv','v_vturb'],
@@ -297,18 +301,18 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 		D_SST = 1 				# order of derivative of SST
 		S_SST = -1 				# sign of SST
 		atZ = 10 				# m, height of CHOICE
-		PRESET = 'paper'		# None or DMM or PA or LA13 or DMMtau or paper
+		PRESET = 'PA'		# for paper: either 'paper' (figure) or 'DMM' or 'DMMtau' (linear regression coeff) or 'PA'
 		res = 50 				# m
-		V_INTEG = False 			# vertical integration or not
+		V_INTEG = False 		# vertical integration or not
 		UPFRONT_ONLY = True 	# compute correlation with only the 1st front
 		#
 		Corr_atZ_AllInOne(X,Z,dsmean,dsB.SST[1,nhalo:-nhalo],CHOICE,D_VAR,D_SST,S_SST,atZ,V_INTEG,UPFRONT_ONLY,PRESET,res,path_save,dpi)
 		#
 		#-------------------------------------
 	# ====================================================================
-	# Fig.7 Coherent structures analysis : quadrants
+	# Fig.8 Coherent structures analysis : quadrants
 	# ====================================================================
-	if NUM_FIG==7 or NUM_FIG==-1:
+	if NUM_FIG==8 or NUM_FIG==-1:
 			print(' * Quadrant analysis')
 			# Paper for reference : 
 			# 	- neutral rough ABL ref : Lin 1996
@@ -327,18 +331,20 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 			print('		- momentum efficiency at some X')
 			#
 			# this is in paper
-			L_atX = np.array([4.0,10.0,13.0,23.0,26.0,38.0]) # in km
+			if CHOIX=='S1':
+				L_atX = np.array([4.0,10.0,13.0,23.0,26.0,38.0]) # in km
+			elif CHOIX=='S1_Ly8km':
+				L_atX = np.array([4.0,8.5,11.5,23.0,26.0,38.0]) # in km
 			zimax = 0.3 # paper is with 0.3
 			path_save = path_TURB
 			#
 			plot_uw_efficiencies_atX(X,Z,Tstart,Tstop,window,crit_value,dsflx,L_dsquadrant,dsref,L_atX,dataSST,zimax,path_save,dpi)
 			#
 			#--------------------------------------------------			
-	
 	# ====================================================================
-	# Fig.9,10,A1 Coherent structures analysis : conditionnal sampling
+	# Fig. 7, 9, 10, 11, 12 Coherent structures analysis : conditionnal sampling
 	# ====================================================================
-	if NUM_FIG==9 or NUM_FIG==10 or NUM_FIG=='A1' or NUM_FIG==-1:		
+	if NUM_FIG==7 or NUM_FIG==9 or NUM_FIG==10 or NUM_FIG==11 or NUM_FIG==12 or NUM_FIG==-1:		
 		print(' * Conditionnal sampling C10')
 		# + INPUT FOR BUILDING FILES |
 		print('	- Building conditionnal sampling files')
@@ -346,9 +352,9 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 		path_save = path_outpng+'TURB_STRUCTURE/'
 		data = {'cold':xr.open_dataset(L_BACKUP['cold']), 
 				'warm':xr.open_dataset(L_BACKUP['warm']),
-				'S1':dsO} 						# 'S1decayHalf':xr.open_mfdataset('./CAS06_SST_is_Tini_SVT_DecayHalf/FICHIERS_OUT/*nc',chunks=chunksOUT)
+				CHOIX:dsO} 						# 'S1decayHalf':xr.open_mfdataset('./CAS06_SST_is_Tini_SVT_DecayHalf/FICHIERS_OUT/*nc',chunks=chunksOUT)
 											# 'warm_wide':xr.open_dataset('CAS10_SVT_wide/CAS10.1.002.002.nc')
-		data_mean = {'cold':dsref['cold'],'warm':dsref['warm'],'S1':dsmean} 
+		data_mean = {'cold':dsref['cold'],'warm':dsref['warm'],CHOIX:dsmean} 
 													# ,'S1decayHalf':xr.open_dataset('DATA_turb/06WdecayHalf_mean_fields.nc',chunks=chunksNOHALO)
 													# ,'warm_wide':dsref['warm_wide']
 		param_COND = {'C10':(1,	# if C10 : strength of the conditionnal sampling (default = 1)
@@ -378,37 +384,10 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 		if SVT_type=='SVT':
 			RV_DIFF='MEAN'
 		# - END INPUT FOR PLOTS |
-		
-		if NUM_FIG==9 or NUM_FIG==-1:
-			print('	- Looking at coherent structures for ref simus')
-			#
-			dsCS1 = {'warm' : xr.open_dataset('DATA_turb/S1_CS1_warm_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO),
-					'cold' : xr.open_dataset('DATA_turb/S1_CS1_cold_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)}
-			atzi = 0.9 	# k*zi, for plot XY
-			aty = 20 	# j index, for plot XZ
-			atx = 269	# i index, for plot YZ
-			indt = -1 	# time index, -1 <=> t=+3h
-			L_case = ['warm','cold'] # 'cold' and/or 'warm'
-			if ('flx_profile_nice' in L_plot) and (TURB_COND=='C10'):
-				path_save_NICE = path_save + 'NICE_FLX_REF'+'C10_m1_g0.5_SVT' # to be changed if CS changes
-				plots_nice_flx_ref_CS1(Z,dsCS1,dsref,path_save,dpi)
-			else:
-				plots_ref_CS1(X,Y,Z,dsCS1,dsref,K,atzi,aty,atx,SEUIL_ML,SVT_type,indt,L_case,L_var,L_plot,path_save_NICE,dpi)
-			#
-			#--------------------------------------------------	
-			print('	- uw decomposition at 10 ,13 23 km for S1')
-			# = plot_CS1_S1 in a nice way
-			# this figure is in paper
-			L_atX = np.array([10.0,13.0,23.0])
-			path_saving = path_outpng+'TURB_STRUCTURE/'
-			dsCS1 = xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)
-			PLOT_REF = False	# plot total flux of ref simulations (paper = False)
-			PLOT_CONTRIB = True	# decompose mean flux into structures' contribution (paper = True)
-			#
-			uw_decomposition_10_13_23_km(X,Z,dsCS1,dsref,dsflx,L_atX,PLOT_REF,PLOT_CONTRIB,path_saving,dpi)
-			#
-			#--------------------------------------------------	
-		if NUM_FIG=='A1' or NUM_FIG==-1: #or NUM_FIG==-1:
+		#########
+		# Fig.7 Snapshot of S1
+		#########
+		if NUM_FIG==7 or NUM_FIG==-1: #or NUM_FIG==-1:
 			print('	- Mean flow advected coherent strutures: a movie')
 			#
 			# Advection of structures : building the history of a structure based on a advection velocity
@@ -425,27 +404,103 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 			# Note : t*=15min => tmax-tmin should be around 30 to capture ascent and descent of a convective structure
 			
 			L_TURB_COND = ['C10'] # 'C10','ITURB2'
-			ini_t = 120 		# in index of time, instant of interested to start from, = ncview -1
+			ini_t = 120 # 120 		# in index of time, instant of interested to start from, = ncview -1
 			ini_x = 395 		# in index of ni, location of the structure to start from
 			tmin = 60		# how far back in time to look 
-			tmax = 120  		# how far forward in time to look
+			tmax = 120 # 120  		# how far forward in time to look
 			fps = 5			# movie frame per seconde
-			stepy,stepz = 1,1 	# vector field : skipping cells 
-			Awidth = 0.002		# vector field : arrow width
-			scale = 70			# vector field : size of arrows
+			stepy,stepz = 2,2 	# vector field : skipping cells 
+			Awidth = 0.005			# vector field : arrow width
+			scale = 20			# vector field : size of arrows
 			path_save = path_outpng + 'object_videos/'
 			case = 'clean' 		# 'clean': less things on the plot
 			#
-			if case=='clean': # up/down obj, rv and SST
-				movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
-			elif case=='both':
-				movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
-				movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
-			elif case=='full': # all obj, sv1,sv4,sv3,rv and SST
-				movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
+			movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
+
+			# if case=='clean': # up/down obj, rv and SST
+			# 	movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
+			# elif case=='both':
+			# 	movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
+			# 	movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
+			# elif case=='full': # all obj, sv1,sv4,sv3,rv and SST
+			# 	movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
 			#
 			#--------------------------------------------------					
-		if NUM_FIG==10 or NUM_FIG==-1:
+		#########
+		# Fig.9 Characteristics of updrafts
+		#########
+		if NUM_FIG==9 or NUM_FIG==-1:
+			print(" * Characteristics of updrafts")
+			# Buoy_in_structures + u_and_w_fluc_in_updrafts in a nice way
+			# this figure is in paper
+			BLIM = [-6,6] # x10e-3
+			L_atX = np.array([4,10.0,13.0,23.0,26.0,38.0])
+			if CHOIX=='S1':
+				L_atX = np.array([4,10.0,13.0,23.0,26.0,38.0]) # in km
+			elif CHOIX=='S1_Ly8km':
+				L_atX = np.array([4,8.5,11.5,23.0,26.0,38.0]) # in km
+			path_saving = path_TURB
+			K = 5/100 # minimum surface covered of a structure to plot profiles
+			dsCS1 = xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_'+CHOIX+'_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO) # to get 'updrafts' detection
+			dsCS1cold = xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_cold_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)
+			dsCS1warm = xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_warm_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)
+			#
+			updraft_charateristics(X,Z,dsCS1,dsmean,dsCS1warm,dsCS1cold,dataSST,crit_value,Tstart,Tstop,window,BLIM,L_atX,K,path_saving,dpi)
+			#
+			#-------------------------------------
+		#########
+		# Fig. 10,11 uw and wthtv flux decomposition, S1 and Ref
+		#########
+		if NUM_FIG==10 or NUM_FIG==1 or NUM_FIG==-1:
+			print('	- Looking at coherent structures for ref simus')
+			#
+			dsCS1 = {'warm' : xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_warm_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO),
+					'cold' : xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_cold_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)}
+			atzi = 0.9 	# k*zi, for plot XY
+			aty = 20 	# j index, for plot XZ
+			atx = 269	# i index, for plot YZ
+			indt = -1 	# time index, -1 <=> t=+3h
+			L_case = ['warm','cold'] # 'cold' and/or 'warm'
+			path_save_NICE = path_save + 'NICE_FLX_REF'+'C10_m1_g0.5_SVT' # to be changed if CS changes
+			if ('flx_profile_nice' in L_plot) and (TURB_COND=='C10'):
+				plots_nice_flx_ref_CS1(Z,dsCS1,dsref,path_save,dpi)
+			else:
+				plots_ref_CS1(X,Y,Z,dsCS1,dsref,K,atzi,aty,atx,SEUIL_ML,SVT_type,indt,L_case,L_var,L_plot,path_save_NICE,dpi)
+			#
+			#--------------------------------------------------	
+			
+			# = plot_CS1_S1 in a nice way
+			# this figure is in paper
+			if CHOIX=='S1':
+				L_atX = np.array([10.0,13.0,23.0]) # in km
+			elif CHOIX=='S1_Ly8km':
+				L_atX = np.array([8.5,11.5,23.0]) # in km
+			path_saving = path_outpng+'TURB_STRUCTURE/'
+			dsCS1 = xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_'+CHOIX+'_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)
+			PLOT_REF = False	# plot total flux of ref simulations (paper = False)
+			PLOT_CONTRIB = True	# decompose mean flux into structures' contribution (paper = True)
+			#dsO_i = mass_interpolator(dsO,chunksNOHALO_interp) #.isel(
+					#level=slice(nhalo,-nhalo),ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo)
+					#) # .chunk(chunksNOHALO_interp)
+			print('	- Decomposition of flux at '+str(L_atX)+' km for S1')
+			#
+			print('	- 	uw')
+			flux_decomposition_at_Xkm('uw',X,Z,dsmean,dsCS1,dsref,dsflx,L_atX,PLOT_REF,PLOT_CONTRIB,path_saving,dpi)
+			#
+			print('	- 	wthtv')
+			flux_decomposition_at_Xkm('wthtv',X,Z,dsmean,dsCS1,dsref,dsflx,L_atX,PLOT_REF,PLOT_CONTRIB,path_saving,dpi)
+			#
+			print('	- 	wrv')
+			#flux_decomposition_at_Xkm('wrv',X,Z,dsmean,dsCS1,dsref,dsflx,L_atX,PLOT_REF,PLOT_CONTRIB,path_saving,dpi)
+			#
+			print('	- 	wtht')
+			#flux_decomposition_at_Xkm('wtht',X,Z,dsmean,dsCS1,dsref,dsflx,L_atX,PLOT_REF,PLOT_CONTRIB,path_saving,dpi)
+			#
+			#--------------------------------------------------	
+		#########
+		# Fig. 12 C10 m sensitivity study
+		#########
+		if NUM_FIG==12 or NUM_FIG==-1:
 			TURB_COND = 'C10' # C10 or ITURB3
 			print('	- '+TURB_COND+': m sensitivity study') 
 			# this is used in paper
@@ -460,31 +515,13 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 			path_save = path_outpng
 			i = 259 	# ni index for YZ plot
 			t = 120 	# time index for YZ plot
-			atX = 13 	# km, for fluxes
+			atX = 11.5 	# km, for fluxes
 			L_choice = ['2'] # 1, 2, 3
 			#
-			CS_m_sensitivity(X,Y,Z,data,data_mean,dsflx,TURB_COND,L_choice,chunksNOHALO,i,t,atX,path_save,path_CS1,dpi)
+			CS_m_sensitivity(X,Z,CHOIX,data,data_mean,dsflx,TURB_COND,L_choice,chunksNOHALO,i,t,atX,path_save,path_CS1,dpi)
 			#
 			#--------------------------------------------------
 			
-	# ============================================================
-	# Fig.8 Characteristics of updrafts
-	# ============================================================
-	if NUM_FIG==8 or NUM_FIG==-1:
-		print(" * Characteristics of updrafts")
-		# Buoy_in_structures + u_and_w_fluc_in_updrafts in a nice way
-		# this figure is in paper
-		BLIM = [-6,6] # x10e-3
-		L_atX = np.array([4,10.0,13.0,23.0,26.0,38.0])
-		path_saving = path_TURB
-		K = 5/100 # minimum surface covered of a structure to plot profiles
-		dsCS1 = xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO) # to get 'updrafts' detection
-		dsCS1cold = xr.open_dataset('DATA_turb/S1_CS1_cold_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)
-		dsCS1warm = xr.open_dataset('DATA_turb/S1_CS1_warm_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)
-		#
-		updraft_charateristics(X,Z,dsCS1,dsCS1warm,dsCS1cold,dataSST,crit_value,Tstart,Tstop,window,BLIM,L_atX,K,path_saving,dpi)
-		#
-		#-------------------------------------
 	# ===================================================
 	# Fig.11 Exploring the 'thermal overshoot'
 	# ===================================================
@@ -539,7 +576,12 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 	#	passive tracer injected by NAM_CONSAMP.
 	# 9 tau have been tested : 1min,4min,7min,10min,12min,15min,20min,30min,40min
 
+	# BEWARE: this part is done with a simulation with Ly=2km (and not Ly = 8km) !!!
+
 	if NUM_FIG=='S1' or NUM_FIG==-1:
+		print('BEWARE: this part is done with a simulation with Ly=2km (and not Ly = 8km) !!!')
+		print('Be sure that you have run the right simulations')
+
 		print(' * Investigating radio decay')
 		path_CS1 = 'radio_decay_sensitivity/'
 		os.system('mkdir -p radio_decay_sensitivity')
@@ -616,6 +658,188 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 		ax.set_xlabel('X (km)')
 		#
 		#-------------------------------------
+	
+	
+	# ===================================================
+	# Review 1 plots
+	# ===================================================
+	if NUM_FIG=='REV1':
+		path_save_png = 'pngs_rev1/'
+		path2 = '/mnt/60df13e6-86a2-4cac-b207-817433cddfe5/WORKDIR2/56MNH/simu_paper_clean_HighRes_rev1/'
+		path_warm_ref = path2+'RefW/FICHIERS_OUT/CAS10.1.001.OUT.001.nc' 
+		path_cold_ref = path2+'RefC/FICHIERS_OUT/CAS09.1.001.OUT.001.nc'
+
+		dsmean2 = xr.open_dataset('DATA_turb/S1_Ly8km_mean_fields.nc')
+		dsflx2 = xr.open_dataset('DATA_turb/S1_Ly8km_flx_fields.nc')
+
+		
+		dico_dsrefO = {"cold":mass_interpolator( 
+							xr.open_mfdataset(abs_path+'RefC/CAS09.1.001.003_comp.nc'),
+							chunksNOHALO_interp).isel(
+								ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo)),
+						"warm":mass_interpolator( 
+							xr.open_mfdataset(abs_path+'RefW/CAS10.1.001.003_comp.nc'),
+							chunksNOHALO_interp).isel(
+								ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo)),
+								}
+		
+
+		# ici attention il faut enlever les références à S1 !
+
+		# Roll factor
+		if False: 
+			print('* Computing the Roll factor from Salesky 2017')
+			
+			VAR = 'UT'
+			atZi = -10 # 0.1
+			dsO = xr.open_mfdataset(path_OUT['S1_Ly8km'] + L_OUT['S1_Ly8km'])
+			dsO_i = mass_interpolator(dsO,chunksNOHALO_interp)
+			RollFactor(VAR,atZi,dico_dsO_i['S1_Ly8km'],dico_dsrefO,path_save_png,dpi)
+			
+		# Looking at North/South flow : coriolis or better mixing (turbulent) ?
+		if False:
+			print('* Investigating N/S flow')
+			atX = 13 #km
+			atZ = 10 # m
+			listeX = [4,8.5,11.5,23,26,38] #[4,10,13,23,26,38]
+			L_c = ['blue','salmon','orange','red','c','springgreen']
+
+			meanV_and_Vbudget(X,Z,atX,atZ,listeX,L_c,dsflx,dsmean,dataSST,dsref,path_save_png,dpi)
+
+		# looking how Ly=8km is different from Lx=2km
+		if False: 
+			# Note : you need the Ly=8km version AND the Ly=2km version
+
+			dico_dsO = {"S1":xr.open_mfdataset(path_OUT['S1'] + L_OUT['S1']),
+					"S1_Ly8km":xr.open_mfdataset(path_OUT['S1_Ly8km'] + L_OUT['S1_Ly8km']),}
+
+			dico_dsO_i = {'S1':mass_interpolator(dico_dsO['S1'],chunksNOHALO_interp),
+					'S1_Ly8km':mass_interpolator(dico_dsO['S1_Ly8km'],chunksNOHALO_interp)}
+
+			# ici à changer quand j'ai les 120 fichiers pour la version Lx=8km
+			# Vm2 = ds2.VT[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo].mean(dim=['time','nj'])
+			# Um2 = ds2.UT[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo].mean(dim=['time','nj'])
+			# Wm2 = ds2.WT[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo].mean(dim=['time','nj'])
+			Vm2 = dsmean2.Vm
+			Um2 = dsmean2.Um
+			Wm2 = dsmean2.Wm
+
+			# figures a enregistrer
+			if False:
+				# V
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				s = ax.pcolormesh(dsmean.ni/1000,dsmean.level/ABLH_S1,(dsmean.Vm - Vm2)/Vm2,vmin=-0.1,vmax=0.1,cmap='seismic')
+				plt.colorbar(s,ax=ax)
+				ax.set_ylabel('altitude (m)')
+				ax.set_xlabel('X (km)')
+				ax.set_title('<V>(Ly=2km) - <V>(Ly=8km)')
+				ax.set_ylim([0,1.2])
+				# delta de ~ 0.1 m/s, c'est bcp
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				s = ax.pcolormesh(dsmean.ni/1000,dsmean.level/ABLH_S1,dsmean.Vm,vmin=-1,vmax=0,cmap='jet')
+				plt.colorbar(s,ax=ax)
+				ax.set_ylabel('altitude (m)')
+				ax.set_xlabel('X (km)')
+				ax.set_title('<V>(Ly=2km) (m/s)')
+				ax.set_ylim([0,1.2])
+
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				s = ax.pcolormesh(dsmean.ni/1000,dsmean.level/ABLH_S1,Vm2,vmin=-1,vmax=0,cmap='jet')
+				plt.colorbar(s,ax=ax)
+				ax.set_ylabel('altitude (m)')
+				ax.set_xlabel('X (km)')
+				ax.set_title('<V>(Ly=8km) (m/s)')
+				ax.set_ylim([0,1.2])
+
+				# U
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				s = ax.pcolormesh(dsmean.ni/1000, dsmean.level/ABLH_S1,dsmean.Um - Um2,vmin=-0.1,vmax=0.1,cmap='seismic')
+				plt.colorbar(s,ax=ax)
+				ax.set_ylabel('altitude (m)')
+				ax.set_xlabel('X (km)')
+				ax.set_title('<U>(Ly=2km) - <U>(Ly=8km)')
+				ax.set_ylim([0,1.2])
+				# delta de ~ 0.05 m/s, c'est peu
+
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				s = ax.contourf(dsmean.ni/1000,dsmean.level/ABLH_S1,dsmean.Um,levels=np.arange(6.0,7.5,0.1),cmap='Greys_r')
+				plt.colorbar(s,ax=ax)
+				ax.set_ylabel('altitude (m)')
+				ax.set_xlabel('X (km)')
+				ax.set_title('<U>(Ly=2km) (m/s)')
+				ax.set_ylim([0,1.2])
+				
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				s = ax.contourf(dsmean.ni/1000,dsmean.level/ABLH_S1,Um2,levels=np.arange(6.0,7.5,0.1),cmap='Greys_r')
+				plt.colorbar(s,ax=ax)
+				ax.set_ylabel('altitude (m)')
+				ax.set_xlabel('X (km)')
+				ax.set_title('<U>(Ly=8km) (m/s)')
+				ax.set_ylim([0,1.2])
+
+				# # W
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				s = ax.pcolormesh(dsmean.ni/1000,dsmean.level/ABLH_S1,dsmean.Wm - Wm2,vmin=-0.01,vmax=0.01,cmap='seismic')
+				plt.colorbar(s,ax=ax)
+				ax.set_ylabel('altitude (m)')
+				ax.set_xlabel('X (km)')
+				ax.set_title('<W>(Ly=2km) - <W>(Ly=8km) (m/s)')
+				ax.set_ylim([0,1.2])
+
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				s = ax.pcolormesh(dsmean.ni/1000,dsmean.level/ABLH_S1,dsmean.Wm,vmin=-0.1,vmax=0.1,cmap='seismic')
+				plt.colorbar(s,ax=ax)
+				ax.set_ylabel('altitude (m)')
+				ax.set_xlabel('X (km)')
+				ax.set_title('<W>(Ly=2km) (m/s)')
+				ax.set_ylim([0,1.2])
+
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				s = ax.pcolormesh(dsmean.ni/1000,dsmean.level/ABLH_S1,Wm2,vmin=-0.1,vmax=0.1,cmap='seismic')
+				plt.colorbar(s,ax=ax)
+				ax.set_ylabel('altitude (m)')
+				ax.set_xlabel('X (km)')
+				ax.set_title('<W>(Ly=8km) (m/s)')
+				ax.set_ylim([0,1.2])
+
+			if True:
+				# uw, wthtv flux decomposition at X =13km
+				indx = nearest(X.values,13*1000)
+
+				uw2 = dsflx2.FLX_UW.isel(ni=indx)
+				wthtv2 = dsflx2.FLX_THvW.isel(ni=indx)
+				uw = dsflx.FLX_UW.isel(ni=indx)
+				wthtv = dsflx.FLX_THvW.isel(ni=indx)
+
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				ax.plot(uw2,dsmean.level/ABLH_S1,label='Ly8km')
+				ax.plot(uw,dsmean.level/ABLH_S1,label='Ly2km')
+				ax.set_ylim([0,1.2])
+				ax.set_xlabel('wthtv')
+				ax.legend()
+
+				fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+				ax.plot(wthtv2,dsmean.level/ABLH_S1,label='Ly8km')
+				ax.plot(wthtv,dsmean.level/ABLH_S1,label='Ly2km')
+				ax.set_ylim([0,1.2])
+				ax.set_xlabel('wthtv')
+				ax.legend()
+
+			# surface cover of coherent structures
+
+		# Entrainment velocity along X
+		if False:
+			print(' * Entrainment rate for referecences')
+			CENTER_DTHTV = 'ABLH' # MIN_FLX or ABLH
+			#
+			entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save_png,dpi)
+	
+	plt.show()
+	dsB.close()
+	dsO.close()
+	dsBU.close()
+	ds000.close()
+	dsINI.close()
 	if client != None:			
 		client.shutdown()
 	

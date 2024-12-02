@@ -1,22 +1,21 @@
 # To be used with analyse.py 
 import xarray as xr
-
 import numpy as np
-import os
-import pathlib
 import matplotlib.pyplot as plt
 import scipy as sp
-from scipy import signal
 import matplotlib as mpl
-from matplotlib import colors as c
 from matplotlib.ticker import MultipleLocator
 from module_cst import *
 from module_tools import *
-from scipy.ndimage import uniform_filter1d,gaussian_filter
+from scipy.ndimage import uniform_filter1d
 from scipy.stats import linregress
 import cmocean
 import numpy.polynomial.polynomial as poly
+from module_building_files import *
+import matplotlib.ticker as ticker
 
+
+# In paper ---------------------
 def FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,crit_value,path_save,dpi):
 	"""The purpose of this procedure is to give an overview of the S1 simulation and 
 		compare it to the homogeneous reference simulations.
@@ -90,6 +89,7 @@ def FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,
 	print('Zi: S1,cold,warm:',zi,zi_c,zi_w)
 		
 	print('	- Last instant XY')
+	Xsplit = 19 # km
 	indz = np.argmin(np.abs(Z_w.values-height))
 	U = dsB.UT[time,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
 	V = dsB.VT[time,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
@@ -97,29 +97,90 @@ def FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,
 	Umin,Umax = 4,6
 	Vmin,Vmax = -1,1
 	Wmin,Wmax = -1,1
-	figsize= (10,5)	 	
-	fig, ax = plt.subplots(3,1,figsize = figsize,constrained_layout=True,dpi=dpi)	
-	s = ax[0].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
-	plt.colorbar(s,ax=ax[0],orientation='horizontal')
-	s = ax[1].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
-	plt.colorbar(s,ax=ax[1],orientation='horizontal')
-	s = ax[2].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='bwr',vmin=Wmin,vmax=Wmax)
-	plt.colorbar(s,ax=ax[2],orientation='horizontal') #,format='%.0e'
-	# add SST front representation
-	Add_SST_bar(X.values/1000,Y.values/1000,4,dataSST,ax[0])
-	Add_SST_bar(X.values/1000,Y.values/1000,4,dataSST,ax[1])
-	Add_SST_bar(X.values/1000,Y.values/1000,4,dataSST,ax[2])
+	figsize= (4,10)	 	
+
+	# fig, ax = plt.subplots(6,1,figsize = figsize,constrained_layout=True,dpi=dpi)
+	# # U
+	# s = ax[0].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
+	# ax[0].set_xlim([0,Xsplit])
+	# s = ax[1].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
+	# ax[1].set_xlim([Xsplit,X[-1]/1000])
+	# fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
+	# # V
+	# s = ax[2].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
+	# ax[2].set_xlim([0,Xsplit])
+	# s = ax[3].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
+	# ax[3].set_xlim([Xsplit,X[-1]/1000])
+	# fig.colorbar(s, ax=ax[2:4], shrink=0.6,pad = 0.01)
+	# # W
+	# s = ax[4].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
+	# ax[4].set_xlim([0,Xsplit])
+	# s = ax[5].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
+	# ax[5].set_xlim([Xsplit,X[-1]/1000])
+	# fig.colorbar(s, ax=ax[4:6], shrink=0.6,pad = 0.01)
 	# axis names
-	ax[0].set_ylabel('Y (km)')
-	ax[1].set_ylabel('Y (km)')
-	ax[2].set_ylabel('Y (km)')
+	# ax[0].set_title(r'U (m.s$^{-1}$), z=1m',loc='right')
+	# ax[2].set_title(r'V (m.s$^{-1}$), z=1m',loc='right')
+	# ax[4].set_title(r'W (m.s$^{-1}$), z='+str(height)+'m',loc='right')
+	# ax[5].set_xlabel('X (km)')
+	# for axe in ax.flatten():
+	# 	axe.set_aspect('equal')
+	# 	axe.set_ylabel('Y (km)')
+	# 	axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
+	# 	axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
+	# 	Add_SST_bar(X.values/1000,Y.values/1000,2,dataSST,axe) # add SST front representation
+	# fig.savefig(path_save+'LastTime_UVW_XY.png')
+
+	figsize= (4,4)
+	# U
+	fig, ax = plt.subplots(2,1,figsize = (4,4),constrained_layout=True,dpi=dpi)
+	s = ax[0].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
+	ax[0].set_xlim([0,Xsplit])
+	s = ax[1].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
+	ax[1].set_xlim([Xsplit,X[-1]/1000])
+	fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
 	ax[0].set_title(r'U (m.s$^{-1}$), z=1m',loc='right')
-	ax[1].set_title(r'V (m.s$^{-1}$), z=1m',loc='right')
-	ax[2].set_title(r'W (m.s$^{-1}$), z='+str(height)+'m',loc='right')
-	ax[2].set_xlabel('X (km)')
+	ax[1].set_xlabel('X (km)')
 	for axe in ax.flatten():
 		axe.set_aspect('equal')
-	fig.savefig(path_save+'LastTime_UVW_XY.png')
+		axe.set_ylabel('Y (km)')
+		axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
+		axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
+		Add_SST_bar(X.values/1000,Y.values/1000,3,dataSST,axe) # add SST front representation
+	fig.savefig(path_save+'LastTime_UVW_XY_U.png')
+	# V
+	fig, ax = plt.subplots(2,1,figsize = (4,4),constrained_layout=True,dpi=dpi)
+	s = ax[0].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
+	ax[0].set_xlim([0,Xsplit])
+	s = ax[1].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
+	ax[1].set_xlim([Xsplit,X[-1]/1000])
+	fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
+	ax[0].set_title(r'V (m.s$^{-1}$), z=1m',loc='right')
+	ax[1].set_xlabel('X (km)')
+	for axe in ax.flatten():
+		axe.set_aspect('equal')
+		axe.set_ylabel('Y (km)')
+		axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
+		axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
+		Add_SST_bar(X.values/1000,Y.values/1000,3,dataSST,axe) # add SST front representation
+	fig.savefig(path_save+'LastTime_UVW_XY_V.png')
+	# W
+	fig, ax = plt.subplots(2,1,figsize = (4,4),constrained_layout=True,dpi=dpi)
+	s = ax[0].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
+	ax[0].set_xlim([0,Xsplit])
+	s = ax[1].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
+	ax[1].set_xlim([Xsplit,X[-1]/1000])
+	fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
+	ax[0].set_title(r'W (m.s$^{-1}$), z='+str(height)+'m',loc='right')
+	ax[1].set_xlabel('X (km)')
+	for axe in ax.flatten():
+		axe.set_aspect('equal')
+		axe.set_ylabel('Y (km)')
+		axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
+		axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
+		Add_SST_bar(X.values/1000,Y.values/1000,3,dataSST,axe) # add SST front representation
+	fig.savefig(path_save+'LastTime_UVW_XY_W.png')
+
 	print('	- Mean fields XZ') # no V bc no use
 	U0 = dsmean.Um[:,0]
 	U0.expand_dims(dim={'ni':X},axis=1)
@@ -147,7 +208,7 @@ def FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,
 	Add_SST_bar(X.values/1000,Z.values/zi,5,dataSST,ax[0])
 	Add_SST_bar(X.values/1000,Z.values/zi,5,dataSST,ax[1])
 	ax[0].set_ylabel(NAMEY)
-	#ax[1].set_ylabel(NAMEY)
+	ax[1].set_ylabel(NAMEY)
 	ax[0].set_title(r'<U> (m.s$^{-1}$)',loc='right')
 	ax[1].set_title(r'<W> (cm.s$^{-1}$)',loc='right')
 	ax[1].set_xlabel('X (km)')
@@ -160,11 +221,11 @@ def FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,
 	fig.savefig(path_save+'FirstLook_UVW.png')
 	
 	# Divergence
-	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)	
-	s = ax.pcolormesh(X/1000,Z/zi,Wm.differentiate('level')*1e5,cmap='bwr',vmin=-8,vmax=8)
-	plt.colorbar(s,ax=ax)
-	ax.set_title('divergence d<W>/dz')
-	ax.set_ylim([0,1.2])
+	# fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)	
+	# s = ax.pcolormesh(X/1000,Z/zi,Wm.differentiate('level')*1e5,cmap='bwr',vmin=-8,vmax=8)
+	# plt.colorbar(s,ax=ax)
+	# ax.set_title('divergence d<W>/dz')
+	# ax.set_ylim([0,1.2])
 	
 	
 	
@@ -228,22 +289,22 @@ def FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,
 	print('		warm u* =',np.round(u_star_w,5),' m/s')
 	
 	print('	- Initial conditions')
-	THT = dsINI.THT[0,nhalo:-nhalo,1,1]
-	RV = dsINI.RVT[0,nhalo:-nhalo,1,1]
-	THTV = Compute_THTV(THT,RV)
-	U = dsINI.UT[0,nhalo:-nhalo,1,1]
-	V = dsINI.VT[0,nhalo:-nhalo,1,1]
-	fig, ax1 = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)	
-	ax1_b = ax1.twiny()
-	ax1.plot(THT[1:2],Z[1:2],c='aqua',label=r'$r_v$ (g/kg)') # dummy field for nice legend
-	ax1.plot(THT[1:],Z[1:],c='r',label=r'$\theta$ (K)')
-	ax1_b.plot(RV[1:]*1000,Z[1:],c='aqua',label=r'$\r_v$ (g/kg)')
-	ax1.plot(THTV[1:],Z[1:],c='orange',label=r'$\theta_v$ (K)')
-	ax1.set_ylim([0,2000])
-	ax1.set_xlabel(r'$\theta$ and $r_v$')
-	ax1.set_ylabel('Altitude (m)')
-	ax1.legend(loc='upper right')
-	fig.savefig(path_save+'CI.png')
+	# THT = dsINI.THT[0,nhalo:-nhalo,1,1]
+	# RV = dsINI.RVT[0,nhalo:-nhalo,1,1]
+	# THTV = Compute_THTV(THT,RV)
+	# U = dsINI.UT[0,nhalo:-nhalo,1,1]
+	# V = dsINI.VT[0,nhalo:-nhalo,1,1]
+	# fig, ax1 = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)	
+	# ax1_b = ax1.twiny()
+	# ax1.plot(THT[1:2],Z[1:2],c='aqua',label=r'$r_v$ (g/kg)') # dummy field for nice legend
+	# ax1.plot(THT[1:],Z[1:],c='r',label=r'$\theta$ (K)')
+	# ax1_b.plot(RV[1:]*1000,Z[1:],c='aqua',label=r'$\r_v$ (g/kg)')
+	# ax1.plot(THTV[1:],Z[1:],c='orange',label=r'$\theta_v$ (K)')
+	# ax1.set_ylim([0,2000])
+	# ax1.set_xlabel(r'$\theta$ and $r_v$')
+	# ax1.set_ylabel('Altitude (m)')
+	# ax1.legend(loc='upper right')
+	# fig.savefig(path_save+'CI.png')
 	
 	# plot 2D var - var(x=0) with profiles next to it
 	liste_x = np.array([4,7.5,15,20,26,38]) #0,5,10,15,20,30,35
@@ -302,7 +363,7 @@ def FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,
 		fig.savefig(path_save+'dU_Uprofiles_FILE.png')
 
 	# dTHTv
-	if True:
+	if False:
 		print('	- THv-THv(x='+str(refAtX)+'km) and profiles of THv')
 		fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
 	#	ax[0].set_title(r'$\theta_v$-$\theta_{v0}$ (K)')
@@ -376,6 +437,1199 @@ def FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,
 		ax[1].set_title(r'$r_v$ profiles (g/kg)')
 		Add_SST_ticks(ax[0],0.02)
 		fig.savefig(path_save+'dRV_RVprofiles_FILE.png')
+
+def PROFILES_AT_X_THTV_THVWFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,Q0_atX,NORM,crit_value,path_save,dpi):
+	"""This procedure plot the profiles of thtv and the total turbulent vertical flux of thtv.
+		1 color for cold part, 1 color for warm part. Base on the 'crit_value' the separate domains 
+		where the SST is "cold" to where it is "warm"
+		
+		INPUTS: 
+			- dataSST: 1D SST data
+			- dsflx: custom built file with mean flux
+			- dsmean: custom built file with mean prognostic variables
+			- dsref: reference profiles for homogeneous simulations
+			- X: X dimension
+			- Z: Z dimension
+			- X_liste: liste of X positions (in meters)
+			- Q0_atX: X position for normalisation of the flux
+			- NORM: wether to normalize or not
+			- crit_value: SST threshold that differentiate 'warm' SST from 'cold' SST
+			- path_save: where to save the figures
+			- dpi: dot per inches
+		OUTPUTS:
+			- A figure with profiles at some X position of: THTV and wthtv
+	"""
+	
+	
+	ind_Q0_atX = np.argmin(np.abs(X.values-Q0_atX))
+	indt_c = -1 # app. the same instant as S1
+	indt_w = -1 # app. the same instant as S1
+	ABLH=600 # m
+	
+	THT_c = dsref['cold']['nomean']['Mean']['MEAN_TH'][indt_w,:]
+	THT_w = dsref['warm']['nomean']['Mean']['MEAN_TH'][indt_w,:]
+	RV_c = dsref['cold']['nomean']['Mean']['MEAN_RV'][indt_w,:]
+	RV_w = dsref['warm']['nomean']['Mean']['MEAN_RV'][indt_w,:]
+	THTV_c = Compute_THTV(THT_c,RV_c) 
+	THTV_w = Compute_THTV(THT_w,RV_w)
+
+	zi,zi_c,zi_w = (  ABLH, 
+			Z[int(np.argmax(THT_c.differentiate('level_les').values))].values,
+			Z[int(np.argmax(THT_w.differentiate('level_les').values))].values   ) # max of Dtheta/dz
+
+	RES_WTHV_c = dsref['cold']['nomean']['Resolved']['RES_WTHV'][indt_c,:]
+	RES_WTHV_w = dsref['warm']['nomean']['Resolved']['RES_WTHV'][indt_w,:]
+	SBG_WTHV_c = THTV_c/THT_c*dsref['cold']['nomean']['Subgrid']['SBG_WTHL'][indt_c,:] + 0.61*THT_c*dsref['cold']['nomean']['Subgrid']['SBG_WRT'][indt_c,:]
+	SBG_WTHV_w = THTV_w/THT_w*dsref['warm']['nomean']['Subgrid']['SBG_WTHL'][indt_w,:] + 0.61*THT_w*dsref['warm']['nomean']['Subgrid']['SBG_WRT'][indt_w,:]
+	WTHV_c = RES_WTHV_c + SBG_WTHV_c
+	WTHV_w = RES_WTHV_w + SBG_WTHV_w
+	flux_wthtv_hand = dsflx.FLX_THvW
+	thtv_hand = dsmean.THTvm
+	
+	
+	
+	mixed_thtv = thtv_hand[np.argmin(np.abs(Z.values-0.1*zi)):np.argmin(np.abs(Z.values-0.7*zi)),:].mean()
+	mixed_thtv_c = THTV_c[np.argmin(np.abs(Z.values-0.1*zi_c)):np.argmin(np.abs(Z.values-0.7*zi_c))].mean()
+	mixed_thtv_w = THTV_w[np.argmin(np.abs(Z.values-0.1*zi_w)):np.argmin(np.abs(Z.values-0.7*zi_w))].mean()
+	
+	print('	mixed thtv [0.1,0.7]zi :',mixed_thtv.values,mixed_thtv_c.values,mixed_thtv_w.values)
+	
+	indx = []
+	for kx in range(len(X_liste)):
+		indx.append(np.argmin(np.abs(X.values-X_liste[kx])))
+	QV0 = np.abs(dsmean.Qv_star[ind_Q0_atX])
+	map1 = 'winter'
+	map2 = 'Reds'
+	if NORM:
+		normFLX=QV0
+		QV_c = WTHV_c[0]
+		QV_w = WTHV_w[0]
+		borne_flx = [-1,3.5]
+		bornesZ = [0,1.2]
+		title_flx = r"< $w \theta_v$>/$Q_v^*$"
+		title_alti = r'z/z$_i$'
+		print('	QV_c,QV_w:',QV_c.values,QV_w.values)
+		print('	zi_c,zi_w:',zi_c,zi_w)
+	else:
+		normFLX=1
+		QV_c,QV_w = 1,1
+		zi,zi_w,zi_c = 1,1,1
+		bornesZ = [0,700]
+		borne_flx = [-0.005,0.025]
+		title_flx = r"< $w \theta_v$>"
+		title_alti = 'Altitude (m)'
+	
+	
+	colorsX = DISCRETIZED_2CMAP_2(map1,map2,X_liste,dataSST,crit_value,X.values)	
+	fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
+	ax[0].plot(THTV_c-mixed_thtv,Z/zi_c,c='b',ls='--',label='refC')	
+	ax[0].plot(THTV_w-mixed_thtv,Z/zi_w,c='r',ls='--',label='refW')	
+	ax[1].plot(WTHV_c/QV_c,Z/zi_c,c='b',ls='--',label='refC')	
+	ax[1].plot(WTHV_w/QV_w,Z/zi_w,c='r',ls='--',label='refW')
+	print('max of dthtv/dz :')
+	for kx in range(0,len(X_liste)):
+		ax[0].plot( thtv_hand[:,indx[kx]]-mixed_thtv,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' ) # [:-1]
+		print( 'X=',X_liste[kx],'km, dthtv/dz_max=',thtv_hand[:,indx[kx]].differentiate('level').sel(level=slice(0,1000)).max().values)
+		ax[1].plot( flux_wthtv_hand[:,indx[kx]]/normFLX,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
+	ax[1].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+	ax[1].xaxis.major.formatter._useMathText = True	
+	ax[0].set_ylabel(title_alti)
+	#ax[1].set_ylabel(title_alti)
+	ax[0].set_xlabel(r'< $\theta_v$ > - $\theta_{v,mixed}$ (K)')
+	ax[1].set_xlabel(title_flx)
+	ax[0].set_ylim(bornesZ)
+	ax[1].set_ylim(bornesZ)
+	ax[0].set_xlim([-0.2,0.4]) # 297.4,298  297.6,298
+	ax[1].vlines(0,0,2000,colors='grey',ls='--')
+	ax[1].set_xlim(borne_flx)
+	ax[1].legend(fontsize=12,loc='upper right')
+	#fig.suptitle(r"Profils (x) of <$\theta_v$> and <$\overline{w'\theta_v'}$>")
+	ax[0].grid()
+	ax[1].grid()
+	for axe in ax.flatten():	
+		axe.xaxis.label.set_fontsize(13)
+		axe.yaxis.label.set_fontsize(13)
+	fig.savefig(path_save+'ProfilesX_THTv_wthtv.png')
+	
+	# normalized with local surface flux
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	ax.plot(WTHV_c/QV_c,Z/zi_c,c='b',ls='--',label='refC')	
+	ax.plot(WTHV_w/QV_w,Z/zi_w,c='r',ls='--',label='refW')
+	for kx in range(0,len(X_liste)):
+		ax.plot( dsflx.FLX_THvW[:,indx[kx]]/dsmean.Qv_star[indx[kx]],Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
+	ax.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+	ax.xaxis.major.formatter._useMathText = True	
+	ax.set_ylabel(title_alti)
+	ax.set_xlabel(r"< w $\theta_v$ >(x)/$Q_v^*$(x)")
+	ax.vlines(0,0,2000,colors='grey',ls='--')
+	ax.legend(fontsize=8,loc='upper right')
+	ax.set_ylim(bornesZ)
+	ax.set_xlim([-0.5,1.6])
+	ax.grid()
+	fig.savefig(path_save+'ProfilesX_THTv_wthtv_atX.png')
+	
+	# entrainment evolution along X with Q* fixed at X=4km
+	E_c = ( WTHV_c/QV_c ).sel(level_les=slice(0,1.2*zi_c)).min(dim='level_les')
+	E_w = ( WTHV_w/QV_w ).sel(level_les=slice(0,1.2*zi_w)).min(dim='level_les')
+	E = ( flux_wthtv_hand/QV0 ).sel(level=slice(0,1.2*zi)).min(dim='level')
+	fig, ax = plt.subplots(1,1,figsize = (5,3),constrained_layout=True,dpi=dpi)
+	ax.hlines( E_c,0,X[-1]/1000,colors='b',label='refC',ls='--')
+	ax.hlines( E_w,0,X[-1]/1000,colors='r',label='refW',ls='--')
+	ax.plot( X/1000,E,c='k',label='S1')
+	ax.set_xlim(X[0]/1000,X[-1]/1000)
+	ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+	ax.yaxis.major.formatter._useMathText = True	
+	ax.set_ylabel(r"E = < w $\theta_v$ >(x)/$Q_v^*$")
+	ax.set_xlabel('X (km)')
+	fig.savefig(path_save+'entrainment_Xevolution.png')
+
+	# entrainment evolution along X with Q* that changes with X.
+	#	this is not valid where surface and top ABL are less related (just after the up and down fronts)
+	#	but it can give info where ABL is in quasi equilibrium with surface (end of cold and warm patches)
+	# 	the hatched areas are determined with the wthtv total flux plot XZ
+	E = ( flux_wthtv_hand/dsmean.Qv_star ).sel(level=slice(0,1.2*zi)).min(dim='level')
+	fig, ax = plt.subplots(1,1,figsize = (5,3),constrained_layout=True,dpi=dpi)
+	ax.hlines( E_c,0,X[-1]/1000,colors='b',label='refC',ls='--')
+	ax.hlines( E_w,0,X[-1]/1000,colors='r',label='refW',ls='--')
+	ax.plot( X/1000,E,c='k',label='S1')
+	ax.add_patch(mpl.patches.Rectangle((5, -0.6), 12, 0.7, hatch='/',fill=False)) # up front region, non linear
+	ax.add_patch(mpl.patches.Rectangle((25, -0.6), 7, 0.7, hatch='/',fill=False)) # down front region, non linear
+	ax.set_xlim(X[0]/1000,X[-1]/1000)
+	ax.set_ylim([-0.6,0.1])
+	ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+	ax.yaxis.major.formatter._useMathText = True	
+	ax.set_ylabel(r"E = < w $\theta_v$ >(x)/$Q_v^*(x)$")
+	ax.set_xlabel('X (km)')
+	fig.savefig(path_save+'entrainment_Xevolution_localQ.png')
+
+def PROFILES_AT_X_U_UWFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,ustar_atX,NORM,crit_value,path_save,dpi):
+	"""This procedure plot the profiles of U and the total turbulent vertical flux of uw.
+		1 color for cold part, 1 color for warm part. Base on the 'crit_value' the separate domains 
+		where the SST is "cold" to where it is "warm"
+		
+		INPUTS: 
+			- dataSST: 1D SST data
+			- dsflx: custom built file with mean flux
+			- dsmean: custom built file with mean prognostic variables
+			- dsref: reference profiles for homogeneous simulations
+			- X: X dimension
+			- Z: Z dimension
+			- X_liste: liste of X positions (in meters)
+			- Q0_atX: X position for normalisation of the flux
+			- NORM: wether to normalize or not
+			- crit_value: SST threshold that differentiate 'warm' SST from 'cold' SST
+			- path_save: where to save the figures
+			- dpi: dot per inches
+		OUTPUTS:
+			- A figure with profiles at some X position of: U and uw
+	"""
+	ind_ustar_atX = np.argmin(np.abs(X.values-ustar_atX))
+	indt_c = -1 # app. the same instant as S1
+	indt_w = -1 # app. the same instant as S1
+	ABLH=600 # m
+	THT_c = dsref['cold']['nomean']['Mean']['MEAN_TH'][indt_w,:]
+	THT_w = dsref['warm']['nomean']['Mean']['MEAN_TH'][indt_w,:]
+	RV_c = dsref['cold']['nomean']['Mean']['MEAN_RV'][indt_w,:]
+	RV_w = dsref['warm']['nomean']['Mean']['MEAN_RV'][indt_w,:]
+	THTV_c = Compute_THTV(THT_c,RV_c) 
+	THTV_w = Compute_THTV(THT_w,RV_w)
+
+	zi,zi_c,zi_w = (  ABLH, 
+			Z[int(np.argmax(THT_c.differentiate('level_les').values))].values,
+			Z[int(np.argmax(THT_w.differentiate('level_les').values))].values   ) # max of Dtheta/dz
+
+	U_c = dsref['cold']['nomean']['Mean']['MEAN_U'][indt_c,:]
+	U_w = dsref['warm']['nomean']['Mean']['MEAN_U'][indt_w,:]
+
+	UW_c = ( dsref['cold']['nomean']['Resolved']['RES_WU'] + dsref['cold']['nomean']['Subgrid']['SBG_WU'] )[indt_c,:]
+	UW_w = ( dsref['warm']['nomean']['Resolved']['RES_WU'] + dsref['warm']['nomean']['Subgrid']['SBG_WU'] )[indt_w,:]
+	flux_uw_hand = dsflx.FLX_UW
+	U_hand = dsmean.Um
+	
+	
+	indx = []
+	for kx in range(len(X_liste)):
+		indx.append(np.argmin(np.abs(X.values-X_liste[kx])))
+	u_star = np.abs(dsmean.u_star[ind_ustar_atX])
+	map1 = 'winter'
+	map2 = 'Reds'
+	#dataSST = dsB.SST[0,1,nhalo:-nhalo].values
+	if NORM:
+		normFLX=u_star**2
+		NormC = np.abs(UW_c[0])
+		NormW = np.abs(UW_w[0])
+		borne_flx = [-1.5,0.3]
+		bornesZ = [0,1.2]
+		title_flx = r"< uw >/$u^{*2}$"
+		title_alti = r'z/z$_i$'
+		print('	u_starC,u_starW:',np.sqrt(NormC).values,np.sqrt(NormW).values)
+		print('	zi_c,zi_w:',zi_c,zi_w)
+	else:
+		normFLX=1
+		QV_c,QV_w = 1,1
+		zi,zi_w,zi_c = 1,1,1
+		bornesZ = [0,700]
+		borne_flx = [-0.005,0.025] # to be modified
+		title_flx = r"< uw >"
+		title_alti = 'Altitude (m)'
+	
+	
+	colorsX = DISCRETIZED_2CMAP_2(map1,map2,X_liste,dataSST,crit_value,X.values)	
+	fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
+	ax[0].plot(U_c,Z/zi_c,c='b',ls='--',label='refC')	
+	ax[0].plot(U_w,Z/zi_w,c='r',ls='--',label='refW')	
+	ax[1].plot(UW_c/NormC,Z/zi_c,c='b',ls='--',label='refC')	
+	ax[1].plot(UW_w/NormW,Z/zi_w,c='r',ls='--',label='refW')
+	for kx in range(0,len(X_liste)):
+		ax[0].plot( U_hand[:,indx[kx]],Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' ) # [:-1]
+		ax[1].plot( flux_uw_hand[:,indx[kx]]/normFLX,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
+	ax[1].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+	ax[1].xaxis.major.formatter._useMathText = True	
+	ax[0].set_ylabel(title_alti)
+	#ax[1].set_ylabel(title_alti)
+	ax[0].set_xlabel(r'< U > (m.s$^{-1}$)')
+	ax[1].set_xlabel(title_flx)
+	ax[0].set_ylim(bornesZ)
+	ax[1].set_ylim(bornesZ)
+	ax[0].set_xlim([5,7.6]) # 
+	ax[1].vlines(0,0,2000,colors='grey',ls='--')
+	ax[1].set_xlim(borne_flx)
+	ax[0].legend(fontsize=12,loc='upper left')
+	ax[0].grid()
+	ax[1].xaxis.set_major_locator(MultipleLocator(0.5))
+	ax[1].grid(True,'major')
+	for axe in ax.flatten():	
+		axe.xaxis.label.set_fontsize(13)
+		axe.yaxis.label.set_fontsize(13)
+	#fig.suptitle(r"Profils (x) of <$\theta_v$> and <$\overline{w'\theta_v'}$>")
+	fig.savefig(path_save+'ProfilesX_U_uw.png')
+	
+	# normalized with local surface flux
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	ax.plot(UW_c/NormC,Z/zi_c,c='b',ls='--',label='refC')	
+	ax.plot(UW_w/NormW,Z/zi_w,c='r',ls='--',label='refW')
+	for kx in range(0,len(X_liste)):
+		ax.plot( flux_uw_hand[:,indx[kx]]/dsmean.u_star[indx[kx]]**2,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
+	ax.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+	ax.xaxis.major.formatter._useMathText = True	
+	ax.set_ylabel(title_alti)
+	ax.set_xlabel(r"< uw >(x)/$u^{*2}$(x)")
+	ax.vlines(0,0,2000,colors='grey',ls='--')
+	ax.legend(fontsize=8,loc='upper right')
+	ax.set_ylim(bornesZ)
+	ax.set_xlim([-1.5,0.3])
+	fig.savefig(path_save+'ProfilesX_U_uw_atX.png')
+
+def Corr_atZ_AllInOne(X,Z,dsmean,SST,CHOICE,D_VAR,D_SST,S_SST,atZ,V_INTEG,UPFRONT_ONLY,PRESET,res,path_save,dpi):
+	"""
+	Compute the normalized correlation between 'CHOICE' and derivatives of SST
+	
+	INPUT:
+		- X 		: X dimension of S1
+		- Z 		: Z dimension of S1
+		- dsmean	: dataset with mean fields
+		- SST		: SST 1D field
+		- CHOICE	: what variable to compute the correlation
+		- D_VAR		: order of derivative for VAR
+		- D_SST		: order of derivative for SST
+		- S_SST		: sign of SST, 1 is positive, -1 is negative
+		- atZ		: height for VAR
+		- V_INTEG	: weither to compute vertically integrated value or not
+		- UPFRONT_ONLY : compute correlation with only the 1st front
+		- PRESET	: premade setup (PA,DMM,LA13)
+		- res		: horizontal resolution
+		- path_save	: where to save figures
+		- dpi		: for figures
+	
+	OUTPUTS:
+		- a plot of Corr(VAR,SST) vs lag, with index of max of lag
+		- a plot with the variable used and the SST shifted
+	"""
+
+	if PRESET=='DMM':
+		CHOICE = 'Um'
+		D_VAR = 1
+		D_SST = 1
+		S_SST = 1
+		atZ = 10
+		V_INTEG = False
+	elif PRESET=='PA':
+		CHOICE = 'Um'
+		D_VAR = 1
+		D_SST = 2 
+		S_SST = -1
+		atZ = 10
+		V_INTEG = True
+	elif PRESET=='LA13': # like Lambaerts 2013
+		CHOICE = 'Wm'
+		D_VAR = 0
+		D_SST = 2
+		S_SST = -1
+		atZ = 300
+		V_INTEG = False
+	elif PRESET=='DMMtau':
+		CHOICE = 'Tau'
+		D_VAR = 1
+		D_SST = 1
+		S_SST = 1
+		atZ = 10
+		V_INTEG = False
+	indz = nearest(Z.values,atZ)	
+	#
+	# > Variable selector	 (TBD: include momentum budget term for ex.)	
+	if CHOICE in ['Um','Vm','Wm']:
+		if V_INTEG:
+			VAR = 1/ABLH_S1 * dsmean[CHOICE][:,:].integrate('level')
+			string_integ = 'integ'
+		else:
+			VAR =  dsmean[CHOICE][indz,:]
+			string_integ = str(atZ)
+	elif CHOICE in ['Tau','u_star']:
+		VAR = dsmean[CHOICE]
+		string_integ = ''	
+	#
+	# > getting VAR
+	if D_VAR==0:
+		#VAR = dsmean[CHOICE][indz,:]
+		name,nicename = CHOICE, CHOICE
+	elif D_VAR==1:
+		#VAR = dsmean[CHOICE][indz,:].differentiate('ni')
+		VAR = VAR.differentiate('ni')
+		name,nicename = 'g'+CHOICE, r'$\bigtriangledown$'+CHOICE
+	elif D_VAR==2:
+		#VAR = dsmean[CHOICE][indz,:].differentiate('ni').differentiate('ni')
+		VAR = VAR.differentiate('ni').differentiate('ni')
+		name,nicename = 'gg'+VAR, r'$\bigtriangleup$'+CHOICE
+	#	
+	# >getting SST variable	
+	if D_SST==0:
+		X1 = SST
+		nameSST,nicenameSST = 'SST', 'SST'
+	if D_SST==1:
+		X1 = SST.differentiate('ni')
+		nameSST,nicenameSST = 'gSST', r'$\bigtriangledown$SST'
+	elif D_SST==2:
+		X1 = SST.differentiate('ni').differentiate('ni')
+		nameSST,nicenameSST = 'ggSST', r'$\bigtriangleup$SST'
+		
+	if S_SST==-1:
+		X1 = -X1	
+		nameSST,nicenameSST = '-'+nameSST,'-'+nicenameSST
+	
+	if UPFRONT_ONLY:
+		name_front = 'CtoW'
+	else:
+		name_front = 'CtoW_WtoC'
+	
+	
+	name_bundle = name+string_integ+'_'+nameSST
+	Savename_SST = 		path_save + name_front + '_SSTonly_'+ name_bundle
+	Savename_corr = 	path_save + name_front + '_Corr_'	+ name_bundle
+	Savename_Shifted = 	path_save + name_front + '_Shifted_'+ name_bundle
+	Savename_Var_vs_X1 = path_save + name_front + '_VS_'	+ name_bundle
+	Savename_RegLin = 	path_save + name_front + '_RegLin_'	+ name_bundle
+	
+	
+	if PRESET=='paper':
+	
+		SaveName = path_save + name_front + '_gU10_gTau_vs_gSST.png'
+		atZ = 10 # m
+		XMAX = 23 # km
+		
+		indz = nearest(Z.values,atZ)	
+		VAR1 = dsmean['Um'][indz,:].differentiate('ni')
+		VAR2 = dsmean['Tau'].differentiate('ni')
+		name1,nicename1 = 'gU10', r'$\partial_x$U$_{10}$'
+		name2,nicename2 = 'gTau', r'$\partial_x \tau$'
+		X1 = SST.differentiate('ni')
+		nameSST,nicenameSST = 'gSST', r'$dSST$/$dx$' # r'$\frac{dSST}{dx}$'
+		
+		indx_borne = nearest(X.values,23*1000)
+		X1[200:] = X1[200] 		# only the first front
+		X1 = X1[:indx_borne] 	# size = indx_borne
+		VAR1 = VAR1[:indx_borne]
+		VAR2 = VAR2[:indx_borne]
+		
+		rho1 = RCorr_nocyclic(VAR1.values,X1.values)
+		indlag1 = np.argmax(rho1)
+		X1_rolled1 = np.roll(X1,indlag1)
+		print('corr max for gU10 is ',np.max(rho1))
+		print('lagmax for gU10 is ',indlag1*res/1000,'km')
+		rho2 = RCorr_nocyclic(VAR2.values,X1.values)
+		indlag2 = np.argmax(rho2)
+		X1_rolled2 = np.roll(X1,indlag2)
+		print('corr max for gTau is ',np.max(rho2))
+		print('lagmax for gTau is ',indlag2*res/1000,'km')
+		
+		fig, ax = plt.subplots(1,1,figsize = (5.5,3),constrained_layout=True,dpi=dpi)
+		ax3 = ax.twinx()
+		ax2 = ax.twinx()
+		ax2.spines.right.set_position(("axes", 1.23))
+		
+		p3 = ax.plot(X[:indx_borne]/1000,VAR1.values*1e5,c='b')
+		p2 = ax2.plot(X[:indx_borne]/1000,VAR2.values*1e6,c='g')
+		#p1 = ax.plot(X[:indx_borne]/1000,np.roll(X1,indlag1)*1e4,c='k',label='lag='+str(indlag1*res/1000)+'km')
+		#ax3.plot(X[:indx_borne]/1000,np.roll(X1,indlag2),c='grey',label='lag='+str(indlag2*res/1000)+'km, R='+str(np.max(rho2)) )
+		p1 = ax.plot(X[:indx_borne]/1000,X1*1e4,c='k',ls='-',label='no lag')
+		
+		ax.set_xlabel('X (km)')
+		ax3.set_ylabel(nicename1) #+ r' (10$^{-5}$ s$^{-1}$)')
+		ax2.set_ylabel(nicename2) #+ r' (10$^{-6}$ N.m$^{-3}$)')
+		ax.set_ylabel(nicenameSST)# + r' (10$^{-4}$ K.m$^{-1}$)')
+		
+		ax.yaxis.label.set_color(p1[0].get_color())
+		ax2.yaxis.label.set_color(p2[0].get_color())
+		ax3.yaxis.label.set_color(p3[0].get_color())
+
+		ax.tick_params(axis='y', colors=p1[0].get_color())
+		ax2.tick_params(axis='y', colors=p2[0].get_color())
+		ax3.tick_params(axis='y', colors=p3[0].get_color())
+		
+		ax.set_xlim([0,23])
+		
+		for axe in [ax,ax2,ax3]:
+			yabs_max = abs(max(axe.get_ylim(), key=abs))
+			axe.set_ylim(ymin=-yabs_max/2, ymax=yabs_max)
+		
+		#ax.legend()		
+		fig.savefig(SaveName)
+		
+	else:	
+		if UPFRONT_ONLY:
+			# here only the cold-to-warm is taken into account
+			# > cutting SST
+			XMAX = 23 # km
+			indx_borne = nearest(X.values,23*1000)
+			X1[200:] = X1[200] 		# only the first front
+			X1 = X1[:indx_borne] 	# size = indx_borne
+			VAR = VAR[:indx_borne]
+			# > Correlation
+			rho = RCorr_nocyclic(VAR.values,X1.values)
+			indlag = np.argmax(rho)
+			X1_rolled = np.roll(X1,indlag)
+			print('corr max is ',np.max(rho))
+			print('lagmax is ',indlag*res/1000,'km')
+			# > linear regression
+			
+			
+			# > Plot
+			colorsX = DISCRETIZED_2CMAP_2('winter','plasma',X[:indx_borne].values,SST[:indx_borne].values,297.3,X[:indx_borne].values)
+			# SST
+			fig, ax = plt.subplots(1,1,figsize = (3,3),constrained_layout=True,dpi=dpi)
+			ax.scatter(X[:indx_borne]/1000,SST[:indx_borne],marker='x',c=colorsX)
+			ax.set_xlabel('X (km)')
+			ax.set_ylabel('SST')
+			fig.savefig(Savename_SST+'.png')
+			
+			# Correlation coefficient
+			fig, ax = plt.subplots(1,1,figsize = (3,3),constrained_layout=True,dpi=dpi)
+			ax.plot(X[:indx_borne]/1000,rho)
+			ax.set_ylabel('rho')
+			ax.set_xlabel('lag')
+			ax.set_title('imax='+str(indlag)+' CorrMax='+str(np.round(rho[indlag],2)))
+			fig.savefig(Savename_corr+'.png')
+			
+			# VAR and SST Shifted vs X
+			fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
+			ax.scatter(X[:indx_borne]/1000,VAR.values,marker='x',c=colorsX)
+			ax2 = ax.twinx()
+			ax2.plot(X[:indx_borne]/1000,np.roll(X1,indlag),c='k',label='lag='+str(indlag*res/1000)+'km')
+			if PRESET=='DMMtau':
+				ax2.plot(X[:indx_borne]/1000,X1,c='k',ls='--',label='no lag')
+			ax.set_xlabel('X (km)')
+			ax.set_ylabel(nicename)
+			ax2.set_ylabel(nicenameSST)
+			yabs_max = abs(max(ax.get_ylim(), key=abs))
+			ax.set_ylim(ymin=-yabs_max, ymax=yabs_max)
+			yabs_max = abs(max(ax2.get_ylim(), key=abs))
+			ax2.set_ylim(ymin=-yabs_max, ymax=yabs_max)
+			ax2.legend()
+			fig.savefig(Savename_Shifted+'.png')
+			
+			# VAR vs X1
+			fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
+			ax.scatter(np.roll(X1,indlag),VAR.values,marker='x',c=colorsX)
+			ax.set_xlabel(nicenameSST+' shifted')
+			ax.set_ylabel(nicename)
+			fig.savefig(Savename_Var_vs_X1+'.png')
+			fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
+			ax.scatter(X1,VAR.values,marker='x',c=colorsX)
+			ax.set_xlabel(nicenameSST+' no shift')
+			ax.set_ylabel(nicename)
+			
+			# linear regression
+			if PRESET=='DMM' or PRESET=='DMMtau':
+				seuilGradSST = 1e-4
+				VAR_reg = np.ma.masked_where( np.abs(X1_rolled) < seuilGradSST, VAR)
+				X1_reg = np.ma.masked_where( np.abs(X1_rolled) < seuilGradSST, X1_rolled)
+				a, b, r, p_value, std_err = linregress(X1_reg.compressed(),VAR_reg.compressed() )
+				print('linear regression:')
+				print("a   ={:8.5f},b   ={:8.3f},r^2 ={:8.5f}".format(a, b, r**2))				
+				fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
+				ax.scatter(X1_reg.compressed(),VAR_reg.compressed(),marker='x',c='k')
+				ax.plot(X1_reg.compressed(), a*X1_reg.compressed() + b,c='r',label="y={:8.5f}x+b,r^2={:8.5f}".format(a, r**2))
+				ax.set_xlabel(nicenameSST+' (shifted) gradSST>'+str(seuilGradSST))
+				ax.set_ylabel(nicename)
+				ax.legend()
+				fig.savefig(Savename_RegLin+'.png')
+				
+				if PRESET=='DMMtau':
+					seuilGradSST = 2e-4
+					VAR_reg = np.ma.masked_where( np.abs(X1) < seuilGradSST, VAR)
+					X1_reg = np.ma.masked_where( np.abs(X1) < seuilGradSST, X1)
+					a, b, r, p_value, std_err = linregress(X1_reg.compressed(),VAR_reg.compressed() )
+					print('linear regression at no lag:')
+					print("a   ={:8.5f},b   ={:8.3f},r^2 ={:8.5f}".format(a, b, r**2))
+					fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
+					ax.scatter(X1_reg.compressed(),VAR_reg.compressed(),marker='x',c='k')
+					ax.plot(X1_reg.compressed(), a*X1_reg.compressed() + b,c='r',label="y={:8.5f}x+b,r^2={:8.5f}".format(a, r**2))
+					ax.set_xlabel(nicenameSST+' gradSST>'+str(seuilGradSST))
+					ax.set_ylabel(nicename)
+					ax.legend()
+		else:
+			# here the cold-to-warm and warm-to-cold are taken into account
+			# Note : linear regression has not meaning in this case (see plot VAR vs XA)
+			
+			# > computing normalized correlation
+			Corr_coef = RCorr_cyclic(VAR.values,X1.values)
+			imax = np.argmax(Corr_coef)
+			print('	lag at max correlation is:',imax*res/1000,'km')
+			# > Shifting SST
+			Shifted_SST = np.zeros(len(SST))
+			Shifted_SST[imax: ] = X1[0:len(SST)-imax]
+			Shifted_SST[:imax] = X1[len(SST)-imax:]
+			
+			# > Plots
+			# Correlation
+			fig, ax = plt.subplots(1,1,figsize = (3,3),constrained_layout=True,dpi=dpi)
+			ax.plot(X/1000,Corr_coef,c='k')
+			ax.set_xlabel('X lag (km)')
+			ax.set_xlim([0,38.4])
+			ax.set_ylim(-1,1)
+			ax.hlines(0.5,0,40,colors='r')
+			ax.hlines(-0.5,0,40,colors='r')
+			ax.set_ylabel('Corr('+nicename+','+nicenameSST+')')
+			ax.set_title('imax='+str(imax)+' CorrMax='+str(np.round(Corr_coef[imax],2)))
+			fig.savefig(Savename_corr+'.png')
+				
+			# VAR and SST Shifted vs X
+			fig, ax = plt.subplots(1,1,figsize = (7,5),constrained_layout=True,dpi=dpi)
+			ax.plot(X[0]/1000,VAR[0],c='b',label=nicenameSST) # dummy 
+			ax.plot(X[0]/1000,VAR[0],c='r',label=nicenameSST+' shifted') # dummy 
+			ax.plot(X/1000,VAR,c='k',label=nicename)
+			ax2 = ax.twinx()
+			ax2.plot(X/1000,X1,c='b',label=nicenameSST)
+			ax2.plot(X/1000,Shifted_SST,c='r',label=nicenameSST+' shifted')
+			ax.set_xlabel('X (km)')
+			ax.set_ylabel(nicename)
+			ax2.set_ylabel(nicenameSST)
+			ax.legend()
+			fig.savefig(Savename_Shifted+'.png')	
+			
+			# Note: this plot has no meaning, to be replaced with VAR vs X1
+			# Relation coefficient at max correlation lag
+	#		fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
+	#		ax.plot(X/1000,alpha,c='k')
+	#		ax.set_xlim([0,38.4])
+	#		ax.set_ylim([0,0.5])
+	#		ax.set_xlabel('X (km)')
+	#		ax.set_ylabel(r'$\alpha$')
+	#		ax.set_title(nicename + r'= $\alpha$' + nicenameSST)
+	#		fig.savefig(path_save+'regCoeff_'+string_integ+name+'_'+nameSST+'_atz'+str(atZ)+'m.png')	
+	
+# after rev1
+def RollFactor(VAR,atZi,dsO_i,dico_dsrefO,path_save,dpi):
+	"""
+	Computes the Roll Factor from Salesky et al. 2017. And plot the variable + the polar autocorrelation function
+
+
+	INPUT:
+
+	OUTPUT:
+
+	"""
+	dsWref = dico_dsrefO['warm'] # mass_interpolator(xr.open_dataset(path_warm_ref))
+	dsCref = dico_dsrefO['cold'] # mass_interpolator(xr.open_dataset(path_cold_ref))
+	res = 50 # m
+	
+	zi_c = 600 #m
+	zi_w = 750 #m
+	
+	atZw = atZi*zi_w # m, altitude where to compute the roll factor
+	atZc = atZi*zi_c # m, altitude where to compute the roll factor
+	coldslice = slice(30000,38000)
+	warmslice = slice(15000,23000)
+
+	if atZi < 0:
+		atZw,atZc = -atZi,-atZi
+		nameZ = 'Z_'+str(-atZi)+'m'
+	else:
+		nameZ = 'zZi_'+str(atZi)
+	if VAR=='UT':
+		VARmin,VARmax = -1,1
+	elif VAR=='WT':
+		VARmin,VARmax = -1,1
+
+	print('		-> variable:',VAR,'altitude:',nameZ)
+
+	dico = {'cold SST':{'var':dsO_i[VAR][0],
+								'altitude':atZc,
+								'ni_slice':coldslice,
+								'nice_name':'cold'},
+			'warm SST':{'var':dsO_i[VAR][0],
+								'altitude':atZw,
+								'ni_slice':warmslice,
+								'nice_name':'warm'},
+			'ref cold SST':{'var': dsCref[VAR][0],
+								'altitude':atZi*531,
+								'ni_slice':slice(0,8000),
+								'nice_name':'Refcold'},
+			'ref warm SST':{'var': dsWref[VAR][0],
+								'altitude':atZi*710,
+								'ni_slice':slice(0,8000),
+								'nice_name':'Refwarm'},
+			}
+
+	for case in dico.keys():
+		ni_slice = dico[case]['ni_slice']
+		altitude = dico[case]['altitude']
+		nicename = dico[case]['nice_name']
+		W = dico[case]['var'].sel(ni=ni_slice).sel(level=altitude,method='nearest')
+		units = W.attrs['units']
+		W = W - W.mean()
+		R_ww,lag_tht,lag_r = Corr_in_polar(W,res)
+		R = Roll_factor(R_ww,lag_r,zi=600) 
+		print('Roll factor is ('+case+')=',R)
+		fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
+		s = ax[0].pcolormesh(W.ni/1000,W.nj/1000,W,cmap='seismic',vmin=VARmin,vmax=VARmax)
+		plt.colorbar(s,ax=ax[0])
+		ax[0].set_xlabel('X (km)')
+		ax[0].set_ylabel('Y (km)')
+		ax[0].set_title(VAR+"' ("+units+') at '+nameZ)
+		s = ax[1].contourf(lag_r/1000,lag_tht*180/np.pi,R_ww,cmap='seismic',levels=np.linspace(-0.4,0.4,20),extend='both')
+		plt.colorbar(s,ax=ax[1])
+		ax[1].set_ylim([-180,180])
+		ax[1].yaxis.set_major_locator(ticker.MultipleLocator(45))
+		ax[1].set_ylabel(r'$r_{\theta}$')
+		ax[1].set_xlabel(r'$r_{\rho}$ (km)')
+		ax[1].set_title(case+', R='+str(np.round(R,2)))
+		fig.savefig(path_save+'RollFactor_'+nameZ+'_'+VAR+'_'+nicename+'.png')
+
+def meanV_and_Vbudget(X,Z,atX,atZ,listeX,L_c,dsflx,dsmean,SST,dsref,path_save,dpi):
+	"""
+	"""
+	indx = nearest(X.values,atX*1000)
+	indz = nearest(Z.values,atZ)
+	term_turb_V = - dsflx.FLX_VW.differentiate('level')
+	term_corio_V = f*(dsmean.Um-7.5)
+	term_adv_V = - dsmean.Um * dsmean.Vm.differentiate('ni')
+	# terme de pression en Y qui est nul (conséquence de la moyenne)
+	Pm = dsmean.Pm
+	dPdX = Pm.differentiate('ni') # this is the pressure without geostrophic gradient
+	Rhom = Exner(Pm)**(Cvd/Rd) * P00 / (Rd*dsmean.THTvm)
+	Tm = Theta_to_T(dsmean.THTm,Pm)
+	dPdX = (Rhom*Tm*Rd).differentiate('ni')
+	V_equilibre_thermique = 1/(f*Rhom) * dPdX
+	rho_10m = Rhom.mean('ni').isel(level=indz).values
+	V_equilibre_thermique2 = 1/f * Rd*np.gradient(SST)
+
+	# <V> flow
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	for k,Xni in enumerate(listeX):
+		indni = nearest(X.values,Xni*1000)
+		ax.plot(dsmean.Vm.isel(ni=indni),Z/ABLH_S1,c=L_c[k],label=str(Xni)+'km')
+	ax.plot(dsref['cold']['nomean']['Mean']['MEAN_V'][-1],Z/ABLH_S1,c='b',label='cold ref',ls='--')
+	ax.plot(dsref['warm']['nomean']['Mean']['MEAN_V'][-1],Z/ABLH_S1,c='r',label='warm ref',ls='--')
+	ax.set_ylabel('z/zi')
+	ax.vlines(0,0,2,colors='gray',linestyles='--')
+	ax.set_ylim([0,1.2])
+	fig.savefig(path_save+'V_flow_atX.png')
+
+	# <V> flow along X
+	fig, ax = plt.subplots(1,1,figsize = (5,3),constrained_layout=True,dpi=dpi)
+	indzi = nearest(Z.values,0.1*ABLH_S1)
+	ax.plot(X/1000,dsmean.Vm.isel(level=indzi),c='k')
+	ax.set_ylabel('<V> at 0.1 zi')
+	ax.legend()
+	ax.set_xlabel('X (km)')
+	fig.savefig(path_save+'V_flow_at0.1zi.png')
+
+	# here this is the V that results from the equilibrium between
+	# coriolis (fV) and pressure (1/rho * dP/dx)
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	for k,Xni in enumerate(listeX):
+		indni = nearest(X.values,Xni*1000)
+		ax.plot(V_equilibre_thermique.isel(ni=indni),Z/ABLH_S1,c=L_c[k],label=str(Xni)+'km')
+	ax.set_ylabel('z/zi')
+	ax.vlines(0,0,2,colors='gray',linestyles='--')
+	ax.set_ylim([0,1.2])
+	ax.legend()
+	#fig.savefig(path_save_png+'V_flow_atX.png')
+
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	ax.plot(X/1000,V_equilibre_thermique.isel(level=indz),c='k')
+	ax.set_ylabel(r'V$_{\theta}$ = 1/f * rho * dP/dx')
+	ax.set_xlabel('X (km)')
+
+	# at z = 10m, dP/dx ~ rho.Rd.dSST/dx
+	# fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	# ax.plot(X/1000,V_equilibre_thermique2,c='k')
+	# ax.set_ylabel(r'V$_{\theta}$ = 1/f * rho * dSST/dx')
+	# ax.set_xlabel('X (km)')
+
+
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	for k,Xni in enumerate(listeX):
+		indni = nearest(X.values,Xni*1000)
+		ax.plot(Rhom.isel(ni=indni),Z/ABLH_S1,c=L_c[k],label=str(Xni)+'km')
+	ax.set_ylabel('z/zi')
+	ax.vlines(0,0,2,colors='gray',linestyles='--')
+	ax.set_ylim([0,1.2])
+	ax.legend()
+	ax.set_xlabel('<rho>')
+
+	# # Z plot
+	# fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	# ax.plot(term_turb_V.isel(ni=indx)*10000,Z/ABLH_S1,c='g',label='-dvw/dz')
+	# ax.plot(term_corio_V.isel(ni=indx)*10000,Z/ABLH_S1,c='orange',label='f.<U>')
+	# ax.plot(term_adv_V.isel(ni=indx)*10000,Z/ABLH_S1,c='k',label='-<U>.d<V>/dx')
+	# ax.set_ylabel('z/zi')
+	# ax.set_xlabel('V budget terms (x10e4)')
+	# ax.legend()
+	# ax.vlines(0,0,2,colors='gray',linestyles='--')
+	# ax.set_ylim([0,1.2])
+	# ax.set_title('at X = '+str(atX)+'km')	
+	# fig.savefig(path_save_png+'V_budget_Z_X13km.png')	
+	
+	# # X plot
+	# fig, ax = plt.subplots(2,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	# indz = nearest(Z.values,540)
+	# ax[0].plot(X.values/1000,term_turb_V.isel(level=indz)*10000,c='g',label='-dvw/dz')
+	# ax[0].plot(X.values/1000,term_corio_V.isel(level=indz)*10000,c='orange',label=r'f.(<U>-$U_g$)>')
+	# ax[0].plot(X.values/1000,term_adv_V.isel(level=indz)*10000,c='k',label='-<U>.d<V>/dx')
+	# ax[0].set_title('at Z = '+str(540)+'m')
+	# indz = nearest(Z.values,10)
+	# ax[1].plot(X.values/1000,term_turb_V.isel(level=indz)*10000,c='g',label='-dvw/dz')
+	# ax[1].plot(X.values/1000,term_corio_V.isel(level=indz)*10000,c='orange',label=r'f.(<U>-$U_g$)')
+	# ax[1].plot(X.values/1000,term_adv_V.isel(level=indz)*10000,c='k',label='-<U>.d<V>/dx')
+	# ax[1].set_xlabel('X (km)')
+	# ax[1].set_title('at Z = '+str(10)+'m')
+	# for axe in ax:
+	# 	axe.set_ylabel('V budget terms (x10e4)')
+	# 	axe.legend()
+	# 	axe.set_ylim([-7,7])
+	# 	axe.hlines(0,0,40,colors='gray',linestyles='--')
+	# 	axe.set_xlim([X[0]/1000,X[-1]/1000])
+	# fig.savefig(path_save_png+'V_budget_X_z10_540m.png')	
+
+def PROFILES_AT_X_RV_WRVFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,E0_atX,NORM,crit_value,path_save,dpi):
+	"""This procedure plot the profiles of RV and the total turbulent vertical flux of rvw.
+		1 color for cold part, 1 color for warm part. Base on the 'crit_value' the separate domains 
+		where the SST is "cold" to where it is "warm"
+		
+		INPUTS: 
+			- dataSST: 1D SST data
+			- dsflx: custom built file with mean flux
+			- dsmean: custom built file with mean prognostic variables
+			- dsref: reference profiles for homogeneous simulations
+			- X: X dimension
+			- Z: Z dimension
+			- X_liste: liste of X positions (in meters)
+			- Q0_atX: X position for normalisation of the flux
+			- NORM: wether to normalize or not
+			- crit_value: SST threshold that differentiate 'warm' SST from 'cold' SST
+			- path_save: where to save the figures
+			- dpi: dot per inches
+		OUTPUTS:
+			- A figure with profiles at some X position of: rv and wrv
+	"""
+	ind_E0_atX = np.argmin(np.abs(X.values-E0_atX))
+	indt_c = -1 # app. the same instant as S1
+	indt_w = -1 # app. the same instant as S1
+	ABLH=600 # m
+	
+	THT_c = dsref['cold']['nomean']['Mean']['MEAN_TH'][indt_w,:]
+	THT_w = dsref['warm']['nomean']['Mean']['MEAN_TH'][indt_w,:]
+	RV_c = dsref['cold']['nomean']['Mean']['MEAN_RV'][indt_w,:]
+	RV_w = dsref['warm']['nomean']['Mean']['MEAN_RV'][indt_w,:]
+	THTV_c = Compute_THTV(THT_c,RV_c) 
+	THTV_w = Compute_THTV(THT_w,RV_w)
+
+	zi,zi_c,zi_w = (  ABLH, 
+			Z[int(np.argmax(THT_c.differentiate('level_les').values))].values,
+			Z[int(np.argmax(THT_w.differentiate('level_les').values))].values   ) # max of Dtheta/dz
+
+	RV_c = dsref['cold']['nomean']['Mean']['MEAN_RV'][indt_c,:]
+	RV_w = dsref['warm']['nomean']['Mean']['MEAN_RV'][indt_w,:]
+
+	RVW_c = ( dsref['cold']['nomean']['Resolved']['RES_WRV'] + dsref['cold']['nomean']['Subgrid']['SBG_WRT'] )[indt_c,:] # here RT = RV, no clouds 
+	RVW_w = ( dsref['warm']['nomean']['Resolved']['RES_WRV'] + dsref['warm']['nomean']['Subgrid']['SBG_WRT'] )[indt_w,:]
+	flux_RVW_hand = dsflx.FLX_RvW
+	RV_hand = dsmean.RVTm
+	
+	mixed_rv = RV_hand[np.argmin(np.abs(Z.values-0.1*zi)):np.argmin(np.abs(Z.values-0.7*zi)),:].mean()
+	mixed_rv_c = RV_c[np.argmin(np.abs(Z.values-0.1*zi_c)):np.argmin(np.abs(Z.values-0.7*zi_c))].mean()
+	mixed_rv_w = RV_w[np.argmin(np.abs(Z.values-0.1*zi_w)):np.argmin(np.abs(Z.values-0.7*zi_w))].mean()
+	print('mixed_rv,mixed_rv_c,mixed_rv_w (g/kg):',mixed_rv.values*1000,mixed_rv_c.values*1000,mixed_rv_w.values*1000)
+	
+	indx = []
+	for kx in range(len(X_liste)):
+		indx.append(np.argmin(np.abs(X.values-X_liste[kx])))
+	E0 = np.abs(dsmean.E0[ind_E0_atX])
+	map1 = 'winter'
+	map2 = 'Reds'
+	#dataSST = dsB.SST[0,1,nhalo:-nhalo].values
+	if NORM:
+		normFLX=E0
+		NormC = np.abs(RVW_c[0])
+		NormW = np.abs(RVW_w[0])
+		borne_flx = [-0.1,2]
+		bornesZ = [0,1.1]
+		title_flx = r"< r$_v$w >/$E^{*}$"
+		title_alti = 'z/zi'
+		print('	E0_C,E0_W:',np.sqrt(NormC).values,np.sqrt(NormW).values)
+		print('	zi_c,zi_w:',zi_c,zi_w)
+	else:
+		normFLX=1
+		QV_c,QV_w = 1,1
+		zi,zi_w,zi_c = 1,1,1
+		bornesZ = [0,700]
+		borne_flx = [-0.005,0.025] # to be modified
+		title_flx = r"< r$_v$w > (kg.kg$^{-1}$.m.s$^{-1}$)"
+		title_alti = 'Altitude (m)'
+	
+	
+	colorsX = DISCRETIZED_2CMAP_2(map1,map2,X_liste,dataSST,crit_value,X.values)	
+	fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
+	ax[0].plot((RV_c-mixed_rv_c)*1000,Z/zi_c,c='b',ls='--',label='refC')	
+	ax[0].plot((RV_w-mixed_rv_w)*1000,Z/zi_w,c='r',ls='--',label='refW')	
+	ax[1].plot(RVW_c/NormC,Z/zi_c,c='b',ls='--',label='refC')	
+	ax[1].plot(RVW_w/NormW,Z/zi_w,c='r',ls='--',label='refW')
+	for kx in range(0,len(X_liste)):
+		ax[0].plot( (RV_hand[:,indx[kx]]-mixed_rv)*1000,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' ) # [:-1]
+		ax[1].plot( flux_RVW_hand[:,indx[kx]]/normFLX,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
+	ax[1].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+	ax[1].xaxis.major.formatter._useMathText = True	
+	ax[0].set_ylabel(title_alti)
+	ax[0].set_xlabel(r'< $r_v$ > - $r_{v,mixed}$ (g.kg$^{-1}$)')
+	ax[1].set_xlabel(title_flx)
+	ax[0].set_ylim(bornesZ)
+	ax[1].set_ylim(bornesZ)
+	ax[0].set_xlim([-0.4,0.4]) # 
+	ax[1].vlines(0,0,2000,colors='grey',ls='--')
+	ax[1].set_xlim(borne_flx)
+	ax[0].legend(fontsize=8,loc='upper right')
+	ax[0].grid()
+	ax[1].grid()
+	fig.savefig(path_save+'ProfilesX_RV_RVW.png')
+	
+	# normalized with local surface flux
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	ax.plot(RVW_c/NormC,Z/zi_c,c='b',ls='--',label='refC')	
+	ax.plot(RVW_w/NormW,Z/zi_w,c='r',ls='--',label='refW')
+	for kx in range(0,len(X_liste)):
+		ax.plot( flux_RVW_hand[:,indx[kx]]/dsmean.E0[indx[kx]],Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
+	ax.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+	ax.xaxis.major.formatter._useMathText = True	
+	ax.set_ylabel(title_alti)
+	ax.set_xlabel(r"< r$_v$w >(x)/$E^{*}$(x)")
+	ax.vlines(0,0,2000,colors='grey',ls='--')
+	ax.legend(fontsize=8,loc='upper right')
+	ax.set_ylim(bornesZ)
+	ax.set_xlim([-0.1,1.4])
+	fig.savefig(path_save+'ProfilesX_RV_RVW_atX.png')	
+
+def PROFILES_AT_X_THT_THWFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,Q0_atX,NORM,crit_value,path_save,dpi):
+	"""This procedure plot the profiles of THT and the total turbulent vertical flux of wtht.
+		1 color for cold part, 1 color for warm part. Base on the 'crit_value' the separate domains 
+		where the SST is "cold" to where it is "warm"
+		
+		INPUTS: 
+			- dataSST: 1D SST data
+			- dsflx: custom built file with mean flux
+			- dsmean: custom built file with mean prognostic variables
+			- dsref: reference profiles for homogeneous simulations
+			- X: X dimension
+			- Z: Z dimension
+			- X_liste: liste of X positions (in meters)
+			- Q0_atX: X position for normalisation of the flux
+			- NORM: wether to normalize or not
+			- crit_value: SST threshold that differentiate 'warm' SST from 'cold' SST
+			- path_save: where to save the figures
+			- dpi: dot per inches
+		OUTPUTS:
+			- A figure with profiles at some X position of: rv and wrv
+	"""
+	ind_Q0_atX = np.argmin(np.abs(X.values-Q0_atX))
+	indt_c = -1 # app. the same instant as S1
+	indt_w = -1 # app. the same instant as S1
+	ABLH=600 # m
+	
+	THT_c = dsref['cold']['nomean']['Mean']['MEAN_TH'][indt_w,:]
+	THT_w = dsref['warm']['nomean']['Mean']['MEAN_TH'][indt_w,:]
+	RV_c = dsref['cold']['nomean']['Mean']['MEAN_RV'][indt_w,:]
+	RV_w = dsref['warm']['nomean']['Mean']['MEAN_RV'][indt_w,:]
+	THTV_c = Compute_THTV(THT_c,RV_c) 
+	THTV_w = Compute_THTV(THT_w,RV_w)
+
+	zi,zi_c,zi_w = (  ABLH, 
+			Z[int(np.argmax(THT_c.differentiate('level_les').values))].values,
+			Z[int(np.argmax(THT_w.differentiate('level_les').values))].values   ) # max of Dtheta/dz
+
+	TH_c = dsref['cold']['nomean']['Mean']['MEAN_TH'][indt_c,:]
+	TH_w = dsref['warm']['nomean']['Mean']['MEAN_TH'][indt_w,:]
+
+	WTH_c = ( dsref['cold']['nomean']['Resolved']['RES_WTH'] + dsref['cold']['nomean']['Subgrid']['SBG_WTHL'] )[indt_c,:] # here RT = RV, no clouds 
+	WTH_w = ( dsref['warm']['nomean']['Resolved']['RES_WTH'] + dsref['warm']['nomean']['Subgrid']['SBG_WTHL'] )[indt_w,:]
+	flux_WTH_hand = dsflx.FLX_THW
+	TH_hand = dsmean.THTm
+	
+	mixed_th = TH_hand[np.argmin(np.abs(Z.values-0.1*zi)):np.argmin(np.abs(Z.values-0.7*zi)),:].mean()
+	mixed_th_c = TH_c[np.argmin(np.abs(Z.values-0.1*zi_c)):np.argmin(np.abs(Z.values-0.7*zi_c))].mean()
+	mixed_th_w = TH_w[np.argmin(np.abs(Z.values-0.1*zi_w)):np.argmin(np.abs(Z.values-0.7*zi_w))].mean()
+	print('mixed_th,mixed_th_c,mixed_th_w (K):',mixed_th.values,mixed_th_c.values,mixed_th_w.values)
+	
+	indx = []
+	for kx in range(len(X_liste)):
+		indx.append(np.argmin(np.abs(X.values-X_liste[kx])))
+	Q0 = np.abs(dsmean.Q_star[ind_Q0_atX])
+	map1 = 'winter'
+	map2 = 'Reds'
+	#dataSST = dsB.SST[0,1,nhalo:-nhalo].values
+	if NORM:
+		normFLX=Q0
+		NormC = np.abs(WTH_c[0])
+		NormW = np.abs(WTH_w[0])
+		borne_flx = [-12.5,7.5]
+		bornesZ = [0,1.1]
+		title_flx = r"< w $\theta$ >/$Q^{*}$"
+		title_alti = 'z/zi'
+		print('	Q0_C,Q0_W:',np.sqrt(NormC).values,np.sqrt(NormW).values)
+		print('	zi_c,zi_w:',zi_c,zi_w)
+	else:
+		normFLX=1
+		QV_c,QV_w = 1,1
+		zi,zi_w,zi_c = 1,1,1
+		bornesZ = [0,700]
+		borne_flx = [-0.005,0.025] # to be modified
+		title_flx = r"< w \theta > (K.m.s$^{-1}$)"
+		title_alti = 'Altitude (m)'
+	
+	
+	colorsX = DISCRETIZED_2CMAP_2(map1,map2,X_liste,dataSST,crit_value,X.values)	
+	fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
+	ax[0].plot(TH_c-mixed_th_c,Z/zi_c,c='b',ls='--',label='refC')	
+	ax[0].plot(TH_w-mixed_th_w,Z/zi_w,c='r',ls='--',label='refW')	
+	ax[1].plot(WTH_c/NormC,Z/zi_c,c='b',ls='--',label='refC')	
+	ax[1].plot(WTH_w/NormW,Z/zi_w,c='r',ls='--',label='refW')
+	for kx in range(0,len(X_liste)):
+		ax[0].plot( TH_hand[:,indx[kx]]-mixed_th,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' ) # [:-1]
+		ax[1].plot( flux_WTH_hand[:,indx[kx]]/normFLX,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
+	#ax[1].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+	#ax[1].xaxis.major.formatter._useMathText = True	
+	ax[0].set_ylabel(title_alti)
+	ax[0].set_xlabel(r'< $\theta$ > - $\theta_{mixed}$ (K)')
+	ax[1].set_xlabel(title_flx)
+	ax[0].set_ylim(bornesZ)
+	ax[1].set_ylim(bornesZ)
+	ax[0].set_xlim([-0.2,0.2]) # 
+	ax[1].vlines(0,0,2000,colors='grey',ls='--')
+	ax[1].set_xlim(borne_flx)
+	ax[0].legend(fontsize=8,loc='upper right')
+	ax[0].grid()
+	ax[1].grid()
+	fig.savefig(path_save+'ProfilesX_TH_WTH.png')
+	
+	# normalized with local surface flux
+	# fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	# ax.plot(WTH_c/NormC,Z/zi_c,c='b',ls='--',label='refC')	
+	# ax.plot(WTH_w/NormW,Z/zi_w,c='r',ls='--',label='refW')
+	# for kx in range(0,len(X_liste)):
+	# 	ax.plot( flux_WTH_hand[:,indx[kx]]/dsmean.Q_star[indx[kx]],Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
+	# ax.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+	# ax.xaxis.major.formatter._useMathText = True	
+	# ax.set_ylabel(title_alti)
+	# ax.set_xlabel(r"< w $\theta$ >(x)/$Q^{*}$(x)")
+	# ax.vlines(0,0,2000,colors='grey',ls='--')
+	# ax.legend(fontsize=8,loc='upper right')
+	# ax.set_ylim(bornesZ)
+	# #ax.set_xlim([-0.1,1.4])
+	# fig.savefig(path_save+'ProfilesX_TH_WTH_atX.png')
+
+def entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save,dpi):
+	"""
+	This procedure is plotting:
+		- mean ABL height (along X)
+		- entrainment velocity (dzi/dt, no large scale sub)
+		- entrainment velocity ( min(wthtv)/delta theta)
+		
+	INPUTS:
+		- X: X dimension
+		- Z: Z dimension
+		- CENTER_DTHTV: 'ABLH' or 'MIN_FLX', middle of the jump of thtv
+		- dsflx: custom built file with mean flux
+		- dsmean: custom built file with mean prog. variables
+		- dsref: mean profiles for reference homogeneous simulations
+		- path_save: where to save the figure
+		- dpi: dot per inches
+	OUTPUTS:
+		- a plot with entrainment velocity for 
+			-> S1 (via we=dzi/dt=U.dzi/dx)
+			-> ref (via dzi/dt)
+			-> estimate with we = min(wthtv)*delta thetav, with different jumps
+	"""
+	# entrainment velocity = dzi/dt
+	#	-> for ref sims, easy to compute with ABLH(t) from MNH outputs
+	#	-> for S1, we consider taylor's hypothesis : dzi/dt ~ Udzi/dx at every x
+	#		and with U = <Um(zi=600)>x
+	#	-> compared with min(wthtv)/dTHTV with different widths for dTHTV
+	
+	# for smoothing
+	WSIZE = 251 # odd, number of X points
+	ORD = 2 # order: because dx=cst, 2=3 for smooth and 3=4 for d/dx
+	
+	thtv_hand = dsmean.THTvm
+	wthtv = dsflx.FLX_THvW.min(dim=['level'])
+	wthtv_p = dsflx.FLX_THvW
+	L_indz_minflx = wthtv_p.sel(level=slice(0,900)).argmin('level').values
+	smoothed_flx = savitzky_golay(Z[L_indz_minflx].values, window_size=WSIZE, order=ORD, deriv=0, rate=1/50)
+	# here we test look at time evolution of E = wthtv_min/wthtv(z=0) for ref sims
+	THT_c = dsref['cold']['nomean']['Mean']['MEAN_TH'][:,:]
+	THT_w = dsref['warm']['nomean']['Mean']['MEAN_TH'][:,:]
+	RV_c = dsref['cold']['nomean']['Mean']['MEAN_RV'][:,:]
+	RV_w = dsref['warm']['nomean']['Mean']['MEAN_RV'][:,:]
+	THTV_c = Compute_THTV(THT_c,RV_c)
+	THTV_w = Compute_THTV(THT_w,RV_w)
+	RES_WTHV_c = dsref['cold']['nomean']['Resolved']['RES_WTHV'][:,:]
+	RES_WTHV_w = dsref['warm']['nomean']['Resolved']['RES_WTHV'][:,:]
+	SBG_WTHV_c = THTV_c/THT_c*dsref['cold']['nomean']['Subgrid']['SBG_WTHL'][:,:] + 0.61*THT_c*dsref['cold']['nomean']['Subgrid']['SBG_WRT'][:,:]
+	SBG_WTHV_w = THTV_w/THT_w*dsref['warm']['nomean']['Subgrid']['SBG_WTHL'][:,:] + 0.61*THT_w*dsref['warm']['nomean']['Subgrid']['SBG_WRT'][:,:]
+	WTHV_c = RES_WTHV_c + SBG_WTHV_c
+	WTHV_w = RES_WTHV_w + SBG_WTHV_w
+	time = np.arange(0,121)
+	#zi_c,zi_w = dsref['cold']['nomean']['Misc']['BL_H'].values[:],dsref['warm']['nomean']['Misc']['BL_H'].values[:]
+	Ec,Ew = np.zeros(len(time)),np.zeros(len(time))
+	zi_c,zi_w = np.zeros(len(time)),np.zeros(len(time))
+	for t in range(len(time)):
+		zi_c[t] = Z[THTV_c[-len(time)+t].differentiate('level_les').argmax('level_les')]
+		zi_w[t] = Z[THTV_w[-len(time)+t].differentiate('level_les').argmax('level_les')]
+		Ec[t] = ( WTHV_c[-len(time)+t,:]/SBG_WTHV_c[-len(time)+t,0] ).sel(level_les=slice(0,1.2*zi_c[t])).min(dim='level_les')
+		Ew[t] = ( WTHV_w[-len(time)+t,:]/SBG_WTHV_w[-len(time)+t,0] ).sel(level_les=slice(0,1.2*zi_w[t])).min(dim='level_les')
+		
+	# we_c =  (dsref['cold']['mean']['Misc']['BL_H'][-1] - dsref['cold']['mean']['Misc']['BL_H'][0])/3600 # 1,251 cm/s
+	# we_w =  (dsref['warm']['mean']['Misc']['BL_H'][-1] - dsref['warm']['mean']['Misc']['BL_H'][0])/3600 # 1,943 cm/s
+	we_c = (zi_c[-1] - zi_c[0]) / 3600
+	we_w = (zi_w[-1] - zi_w[0]) / 3600
+	print('refC we, refW we')
+	print(we_c,we_w)
+
+
+	# Height of ABL along X
+	L_indz = thtv_hand.differentiate('level').sel(level=slice(0,900)).argmax('level').values # altitude of max gradient thtv
+	ABLH_x = Z[L_indz].values
+	Nx = len(ABLH_x)
+	ABLH_x_3 = np.zeros(3*Nx)
+	ABLH_x_3[:Nx] = ABLH_x
+	ABLH_x_3[Nx:2*Nx] = ABLH_x
+	ABLH_x_3[2*Nx:3*Nx] = ABLH_x
+	dHdx = savitzky_golay(ABLH_x_3, window_size=WSIZE, order=ORD, deriv=1, rate=1/50)[Nx:2*Nx] # fake cyclic conditions
+	Uadv = dsmean.Um.sel(level=600,method='nearest').mean(dim='ni').values # for Taylor's hypothesis
+	print('Uadv',Uadv)
+	smoothed = savitzky_golay(ABLH_x, window_size=WSIZE, order=ORD, deriv=0, rate=1/50)
+	
+	# Computing dthtv
+	L_n_inversion = [2,3,4,5] # number of cell around inversion height (ABLH_x) 
+	color = ['cyan','green','orange','purple']
+	deltaTHTV = np.zeros((len(L_n_inversion),Nx))					
+	if CENTER_DTHTV == 'MIN_FLX': # chosing where to compute the dthtv
+		L_mid = L_indz_minflx
+	elif CENTER_DTHTV == 'ABLH':
+		L_mid = L_indz
+	for k,dz in enumerate(L_n_inversion):
+		borne_up = L_mid+dz
+		borne_down = L_mid-dz
+		thtv_z2 = np.diag(thtv_hand[borne_up,:].values)
+		thtv_z1 = np.diag(thtv_hand[borne_down,:].values)
+		deltaTHTV[k,:] =  thtv_z2 -  thtv_z1
+	
+	
+	##### PLOTS
+	
+	# min(wthtv) of reference along time axis
+	fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
+	ax.plot(time,Ec,c='b',label='refC')
+	ax.plot(time,Ew,c='r',label='refW')
+	ax.set_xlabel('time')
+	ax.set_ylabel('E')
+	ax.set_title(r"min($w'\theta_v'$) des references")
+	
+	# ABLH and Z[min(wthtv)]
+	fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
+	ax.plot(X/1000,ABLH_x,c='grey') # not smoothed
+	ax.plot(X/1000,smoothed,c='k',label='ABLH(x)') # smoothed
+	ax.set_xlabel('X (km)')
+	ax.set_ylabel('altitude')
+	ax.plot(X/1000,Z[L_indz_minflx].values, c='orange')
+	ax.plot(X/1000,smoothed_flx , c='r',label=r'Z[min($w\theta_v$)]') # smoothed 
+	#ax.set_title('savgol(w,o,d)=('+str(WSIZE)+','+str(ORD)+',0)')
+	ax.legend()
+	fig.savefig(path_save+'ABL_height_and_smoothed.png')
+	
+	# U.Dzi/DX, we of ref, min(wthtv)/delta_THTV with different width for delta_THTV
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	ax.hlines( 0,X[0]/1000,X[-1]/1000,colors='grey',linestyles='--')
+	ax.hlines( we_c*100,X[0]/1000,X[-1]/1000,colors='b',label='refC')
+	ax.hlines( we_w*100,X[0]/1000,X[-1]/1000,colors='r',label='refW')
+	ax.plot( X/1000, Uadv*dHdx*100,c='k',label='U.dzi/dx')
+	print('zimax for S1 (cm/s):',np.max(Uadv*dHdx*100))
+	smoothed_minflx = savitzky_golay(wthtv, window_size=WSIZE, order=ORD, deriv=0, rate=1/50)
+	for k,dz in enumerate(L_n_inversion):
+		ax.plot( X/1000, -wthtv/deltaTHTV[k,:]*100,c=color[k],label=r'$\pm$ '+str(dz)+' cell') # not smoothed
+		#ax.plot( X/1000, -smoothed_minflx/deltaTHTV[k,:]*100,c=color[k],label=r'$\pm$ '+str(dz)+' cell') # smoothed
+	ax.set_xlabel('X (km)')
+	ax.set_ylabel('we (cm/s)')
+	ax.legend()
+	#ax.set_title('savgol(w,o,d)=('+str(WSIZE)+','+str(ORD)+',1)')
+	fig.savefig(path_save+'entrainment_rate_'+CENTER_DTHTV+'.png')
+
+	# checking that delta_THTV is well around the altitude of min(wthtv)
+	#	X = 13km
+	indx = nearest(X.values,13*1000)
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	ax.vlines(0,0,50,colors='grey')
+	ax.plot(thtv_hand[:,indx]-297.7,Z/600,c='k')
+	for k,dz in enumerate(L_n_inversion):
+		borne_up = L_mid[indx]+dz
+		borne_down = L_mid[indx]-dz
+		ax.hlines(Z[borne_up].values/600,-10,10,colors=color[k],ls='-',label=r'\pm '+str(dz)+' cell')
+		ax.hlines(Z[borne_down].values/600,-10,10,colors=color[k],ls='--')
+	ax2 = ax.twiny()
+	ax2.plot(wthtv_p[:,indx],Z/600,c='r')
+	ax.set_xlim([-0.2,0.8])
+	ax2.set_xlim([-0.005,0.02])
+	ax.set_ylim([0,1.5])
+	ax.set_xlabel(r'$\theta_v$-$\theta_{v,mixed}$ and $\Delta \theta_v$')
+	ax2.set_xlabel(r'$<w\theta_v>$ at X=13km')
+	fig.savefig(path_save+'checking_at_X13km'+CENTER_DTHTV+'.png')
+	#	X = 24km
+	indx = nearest(X.values,24*1000)
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	ax.vlines(0,0,50,colors='grey')
+	ax.plot(thtv_hand[:,indx]-297.7,Z/600,c='k')
+	for k,dz in enumerate(L_n_inversion):
+		borne_up = L_mid[indx]+dz
+		borne_down = L_mid[indx]-dz
+		ax.hlines(Z[borne_up].values/600,-10,10,colors=color[k],ls='-',label=r'\pm '+str(dz)+' cell')
+		ax.hlines(Z[borne_down].values/600,-10,10,colors=color[k],ls='--')
+	ax2 = ax.twiny()
+	ax2.plot(wthtv_p[:,indx],Z/600,c='r')
+	ax.set_xlim([-0.2,0.8])
+	ax2.set_xlim([-0.005,0.02])
+	ax.set_ylim([0,1.5])
+	ax.set_xlabel(r'$\theta_v$ and $\Delta \theta_v$')
+	ax2.set_xlabel(r'$<w\theta_v>$ at X=24km')
+	fig.savefig(path_save+'checking_at_X24km'+CENTER_DTHTV+'.png')
+# End in paper -----------------
 
 	
 def TURNOVER_EDDY_TIME(nhalo,path,savepath):
@@ -585,26 +1839,6 @@ def GAMMA(SOURCE,dsmean,dsBU,dsB,dsflx,Ug,X,Z,res,path_save,dpi):
 	fig.savefig(path_save+'Uwind_ABLH.png')
 	
 	# Bulk aero coefficient Cd defined with u*^2 = Cd*U²
-#	fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-#	ax.plot(X/1000,TAU/Um[0,:],color='k',ls='-')
-#	ax.set_xlabel('X (km)')
-#	ax.set_ylabel('CD ')
-#	ax.set_title('Aero coeff u*² = CD*U² (m/s) and stability -zi/L')
-#	ax2 = ax.twinx()
-#	ax2.plot(X/1000,ABLH1/L,c='g')
-#	ax.set_xlim([X[0]/1000,X[-1]/1000])
-	#fig.savefig(path_save+'CD_coeff.png'	)
-	
-#	fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-#	ax.plot(X/1000,ABLH1,color='k',ls='-')
-#	ax.set_title('ABLH1')
-
-#	fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-#	ax.plot(X/1000,L,color='k',ls='-')
-#	ax.set_title('L')
-	
-	
-	
 
 def CHECK_MASS_CONSERVATION(X,Z,TYPE,X0,AT_X0,dsO,dsINI,ds000,dsBU,path_save,METHOD,dpi):
 	"""
@@ -772,375 +2006,6 @@ def CHECK_MASS_CONSERVATION(X,Z,TYPE,X0,AT_X0,dsO,dsINI,ds000,dsBU,path_save,MET
 		#print(INT_DIV.values)
 	fig.savefig(path_save+'_'+METHOD+'_'+name_save)
 	
-def PROFILES_AT_X_THTV_THVWFLX(dataSST,dsflx,dsmean,dsref,res,X,Z,X_liste,Q0_atX,NORM,crit_value,path_save,dpi):
-	"""This procedure plot the profiles of thtv and the total turbulent vertical flux of thtv.
-		1 color for cold part, 1 color for warm part. Base on the 'crit_value' the separate domains 
-		where the SST is "cold" to where it is "warm"
-		
-		INPUTS : TBD
-	"""
-	
-	
-	ind_Q0_atX = np.argmin(np.abs(X.values-Q0_atX))
-	indt_c = -1 # app. the same instant as S1
-	indt_w = -1 # app. the same instant as S1
-	ABLH=600 # m
-	
-	
-	zi,zi_c,zi_w = (  ABLH, 
-			dsref['cold']['nomean']['Misc']['BL_H'].values[indt_c],  #  max of Dtheta/dz
-			dsref['warm']['nomean']['Misc']['BL_H'].values[indt_w]   ) # max of Dtheta/dz
-	
-	THT_c = dsref['cold']['nomean']['Mean']['MEAN_TH'][indt_w,:]
-	THT_w = dsref['warm']['nomean']['Mean']['MEAN_TH'][indt_w,:]
-	RV_c = dsref['cold']['nomean']['Mean']['MEAN_RV'][indt_w,:]
-	RV_w = dsref['warm']['nomean']['Mean']['MEAN_RV'][indt_w,:]
-	THTV_c = Compute_THTV(THT_c,RV_c) 
-	THTV_w = Compute_THTV(THT_w,RV_w)
-
-	RES_WTHV_c = dsref['cold']['nomean']['Resolved']['RES_WTHV'][indt_c,:]
-	RES_WTHV_w = dsref['warm']['nomean']['Resolved']['RES_WTHV'][indt_w,:]
-	SBG_WTHV_c = THTV_c/THT_c*dsref['cold']['nomean']['Subgrid']['SBG_WTHL'][indt_c,:] + 0.61*THT_c*dsref['cold']['nomean']['Subgrid']['SBG_WRT'][indt_c,:]
-	SBG_WTHV_w = THTV_w/THT_w*dsref['warm']['nomean']['Subgrid']['SBG_WTHL'][indt_w,:] + 0.61*THT_w*dsref['warm']['nomean']['Subgrid']['SBG_WRT'][indt_w,:]
-	WTHV_c = RES_WTHV_c + SBG_WTHV_c
-	WTHV_w = RES_WTHV_w + SBG_WTHV_w
-	flux_wthtv_hand = dsflx.FLX_THvW
-	thtv_hand = dsmean.THTvm
-	
-	
-	
-	mixed_thtv = thtv_hand[np.argmin(np.abs(Z.values-0.1*zi)):np.argmin(np.abs(Z.values-0.7*zi)),:].mean()
-	mixed_thtv_c = THTV_c[np.argmin(np.abs(Z.values-0.1*zi_c)):np.argmin(np.abs(Z.values-0.7*zi_c))].mean()
-	mixed_thtv_w = THTV_w[np.argmin(np.abs(Z.values-0.1*zi_w)):np.argmin(np.abs(Z.values-0.7*zi_w))].mean()
-	
-	print('	mixed thtv [0.1,0.7]zi :',mixed_thtv.values,mixed_thtv_c.values,mixed_thtv_w.values)
-	
-	indx = []
-	for kx in range(len(X_liste)):
-		indx.append(np.argmin(np.abs(X.values-X_liste[kx])))
-	QV0 = np.abs(dsmean.Qv_star[ind_Q0_atX])
-	map1 = 'winter'
-	map2 = 'Reds'
-	if NORM:
-		normFLX=QV0
-		QV_c = WTHV_c[0]
-		QV_w = WTHV_w[0]
-		borne_flx = [-1,3.5]
-		bornesZ = [0,1.2]
-		title_flx = r"< $w \theta_v$>/$Q_v^*$"
-		title_alti = r'z/z$_i$'
-		print('	QV_c,QV_w:',QV_c.values,QV_w.values)
-		print('	zi_c,zi_w:',zi_c,zi_w)
-	else:
-		normFLX=1
-		QV_c,QV_w = 1,1
-		zi,zi_w,zi_c = 1,1,1
-		bornesZ = [0,700]
-		borne_flx = [-0.005,0.025]
-		title_flx = r"< $w \theta_v$>"
-		title_alti = 'Altitude (m)'
-	
-	
-	colorsX = DISCRETIZED_2CMAP_2(map1,map2,X_liste,dataSST,crit_value,X.values)	
-	fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
-	ax[0].plot(THTV_c-mixed_thtv,Z/zi_c,c='b',ls='--',label='refC')	
-	ax[0].plot(THTV_w-mixed_thtv,Z/zi_w,c='r',ls='--',label='refW')	
-	ax[1].plot(WTHV_c/QV_c,Z/zi_c,c='b',ls='--',label='refC')	
-	ax[1].plot(WTHV_w/QV_w,Z/zi_w,c='r',ls='--',label='refW')
-	print('max of dthtv/dz :')
-	for kx in range(0,len(X_liste)):
-		ax[0].plot( thtv_hand[:,indx[kx]]-mixed_thtv,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' ) # [:-1]
-		print( 'X=',X_liste[kx],'km, dthtv/dz_max=',thtv_hand[:,indx[kx]].differentiate('level').sel(level=slice(0,1000)).max().values)
-		ax[1].plot( flux_wthtv_hand[:,indx[kx]]/normFLX,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
-	ax[1].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-	ax[1].xaxis.major.formatter._useMathText = True	
-	ax[0].set_ylabel(title_alti)
-	#ax[1].set_ylabel(title_alti)
-	ax[0].set_xlabel(r'< $\theta_v$ > - $\theta_{v,mixed}$ (K)')
-	ax[1].set_xlabel(title_flx)
-	ax[0].set_ylim(bornesZ)
-	ax[1].set_ylim(bornesZ)
-	ax[0].set_xlim([-0.2,0.4]) # 297.4,298  297.6,298
-	ax[1].vlines(0,0,2000,colors='grey',ls='--')
-	ax[1].set_xlim(borne_flx)
-	ax[1].legend(fontsize=12,loc='upper right')
-	#fig.suptitle(r"Profils (x) of <$\theta_v$> and <$\overline{w'\theta_v'}$>")
-	ax[0].grid()
-	ax[1].grid()
-	for axe in ax.flatten():	
-		axe.xaxis.label.set_fontsize(13)
-		axe.yaxis.label.set_fontsize(13)
-	fig.savefig(path_save+'ProfilesX_THTv_wthtv.png')
-	
-	# normalized with local surface flux
-	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
-	ax.plot(WTHV_c/QV_c,Z/zi_c,c='b',ls='--',label='refC')	
-	ax.plot(WTHV_w/QV_w,Z/zi_w,c='r',ls='--',label='refW')
-	for kx in range(0,len(X_liste)):
-		ax.plot( dsflx.FLX_THvW[:,indx[kx]]/dsmean.Qv_star[indx[kx]],Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
-	ax.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-	ax.xaxis.major.formatter._useMathText = True	
-	ax.set_ylabel(title_alti)
-	ax.set_xlabel(r"< $w\theta_v}$ >(x)/$Q_v^*$(x)")
-	ax.vlines(0,0,2000,colors='grey',ls='--')
-	ax.legend(fontsize=8,loc='upper right')
-	ax.set_ylim(bornesZ)
-	ax.set_xlim([-0.5,1.6])
-	ax.grid()
-	fig.savefig(path_save+'ProfilesX_THTv_wthtv_atX.png')
-	
-	# entrainment evolution along X with Q* fixed at X=4km
-	E_c = ( WTHV_c/QV_c ).sel(level_les=slice(0,1.2*zi_c)).min(dim='level_les')
-	E_w = ( WTHV_w/QV_w ).sel(level_les=slice(0,1.2*zi_w)).min(dim='level_les')
-	E = ( flux_wthtv_hand/QV0 ).sel(level=slice(0,1.2*zi)).min(dim='level')
-	fig, ax = plt.subplots(1,1,figsize = (5,3),constrained_layout=True,dpi=dpi)
-	ax.hlines( E_c,0,X[-1]/1000,colors='b',label='refC',ls='--')
-	ax.hlines( E_w,0,X[-1]/1000,colors='r',label='refW',ls='--')
-	ax.plot( X/1000,E,c='k',label='S1')
-	ax.set_xlim(X[0]/1000,X[-1]/1000)
-	ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-	ax.yaxis.major.formatter._useMathText = True	
-	ax.set_ylabel(r"E = < $w\theta_v}$ >(x)/$Q_v^*$")
-	ax.set_xlabel('X (km)')
-	fig.savefig(path_save+'entrainment_Xevolution.png')
-
-	# entrainment evolution along X with Q* that changes with X.
-	#	this is not valid where surface and top ABL are less related (just after the up and down fronts)
-	#	but it can give info where ABL is in quasi equilibrium with surface (end of cold and warm patches)
-	# 	the hatched areas are determined with the wthtv total flux plot XZ
-	E = ( flux_wthtv_hand/dsmean.Qv_star ).sel(level=slice(0,1.2*zi)).min(dim='level')
-	fig, ax = plt.subplots(1,1,figsize = (5,3),constrained_layout=True,dpi=dpi)
-	ax.hlines( E_c,0,X[-1]/1000,colors='b',label='refC',ls='--')
-	ax.hlines( E_w,0,X[-1]/1000,colors='r',label='refW',ls='--')
-	ax.plot( X/1000,E,c='k',label='S1')
-	ax.add_patch(mpl.patches.Rectangle((5, -0.6), 12, 0.7, hatch='/',fill=False)) # up front region, non linear
-	ax.add_patch(mpl.patches.Rectangle((25, -0.6), 7, 0.7, hatch='/',fill=False)) # down front region, non linear
-	ax.set_xlim(X[0]/1000,X[-1]/1000)
-	ax.set_ylim([-0.6,0.1])
-	ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-	ax.yaxis.major.formatter._useMathText = True	
-	ax.set_ylabel(r"E = < $w\theta_v}$ >(x)/$Q_v^*(x)$")
-	ax.set_xlabel('X (km)')
-	fig.savefig(path_save+'entrainment_Xevolution_localQ.png')
-
-def PROFILES_AT_X_U_UWFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,ustar_atX,NORM,crit_value,path_save,dpi):
-	"""This procedure plot the profiles of U and the total turbulent vertical flux of uw.
-		1 color for cold part, 1 color for warm part. Base on the 'crit_value' the separate domains 
-		where the SST is "cold" to where it is "warm"
-		
-		INPUTS: TBD
-	"""
-	ind_ustar_atX = np.argmin(np.abs(X.values-ustar_atX))
-	indt_c = -1 # app. the same instant as S1
-	indt_w = -1 # app. the same instant as S1
-	ABLH=600 # m
-	zi,zi_c,zi_w = (  ABLH, 
-			dsref['cold']['nomean']['Misc']['BL_H'].values[indt_c],  #  max of Dtheta/dz
-			dsref['warm']['nomean']['Misc']['BL_H'].values[indt_w]   ) # max of Dtheta/dz
-
-	U_c = dsref['cold']['nomean']['Mean']['MEAN_U'][indt_c,:]
-	U_w = dsref['warm']['nomean']['Mean']['MEAN_U'][indt_w,:]
-
-	UW_c = ( dsref['cold']['nomean']['Resolved']['RES_WU'] + dsref['cold']['nomean']['Subgrid']['SBG_WU'] )[indt_c,:]
-	UW_w = ( dsref['warm']['nomean']['Resolved']['RES_WU'] + dsref['warm']['nomean']['Subgrid']['SBG_WU'] )[indt_w,:]
-	flux_uw_hand = dsflx.FLX_UW
-	U_hand = dsmean.Um
-	
-	
-	indx = []
-	for kx in range(len(X_liste)):
-		indx.append(np.argmin(np.abs(X.values-X_liste[kx])))
-	u_star = np.abs(dsmean.u_star[ind_ustar_atX])
-	map1 = 'winter'
-	map2 = 'Reds'
-	#dataSST = dsB.SST[0,1,nhalo:-nhalo].values
-	if NORM:
-		normFLX=u_star**2
-		NormC = np.abs(UW_c[0])
-		NormW = np.abs(UW_w[0])
-		borne_flx = [-1.5,0.3]
-		bornesZ = [0,1.2]
-		title_flx = r"< uw >/$u^{*2}$"
-		title_alti = r'z/z$_i$'
-		print('	u_starC,u_starW:',np.sqrt(NormC).values,np.sqrt(NormW).values)
-		print('	zi_c,zi_w:',zi_c,zi_w)
-	else:
-		normFLX=1
-		QV_c,QV_w = 1,1
-		zi,zi_w,zi_c = 1,1,1
-		bornesZ = [0,700]
-		borne_flx = [-0.005,0.025] # to be modified
-		title_flx = r"< uw >"
-		title_alti = 'Altitude (m)'
-	
-	
-	colorsX = DISCRETIZED_2CMAP_2(map1,map2,X_liste,dataSST,crit_value,X.values)	
-	fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
-	ax[0].plot(U_c,Z/zi_c,c='b',ls='--',label='refC')	
-	ax[0].plot(U_w,Z/zi_w,c='r',ls='--',label='refW')	
-	ax[1].plot(UW_c/NormC,Z/zi_c,c='b',ls='--',label='refC')	
-	ax[1].plot(UW_w/NormW,Z/zi_w,c='r',ls='--',label='refW')
-	for kx in range(0,len(X_liste)):
-		ax[0].plot( U_hand[:,indx[kx]],Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' ) # [:-1]
-		ax[1].plot( flux_uw_hand[:,indx[kx]]/normFLX,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
-	ax[1].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-	ax[1].xaxis.major.formatter._useMathText = True	
-	ax[0].set_ylabel(title_alti)
-	#ax[1].set_ylabel(title_alti)
-	ax[0].set_xlabel(r'< U > (m.s$^{-1}$)')
-	ax[1].set_xlabel(title_flx)
-	ax[0].set_ylim(bornesZ)
-	ax[1].set_ylim(bornesZ)
-	ax[0].set_xlim([5,7.6]) # 
-	ax[1].vlines(0,0,2000,colors='grey',ls='--')
-	ax[1].set_xlim(borne_flx)
-	ax[0].legend(fontsize=12,loc='upper left')
-	ax[0].grid()
-	ax[1].xaxis.set_major_locator(MultipleLocator(0.5))
-	ax[1].grid(True,'major')
-	for axe in ax.flatten():	
-		axe.xaxis.label.set_fontsize(13)
-		axe.yaxis.label.set_fontsize(13)
-	#fig.suptitle(r"Profils (x) of <$\theta_v$> and <$\overline{w'\theta_v'}$>")
-	fig.savefig(path_save+'ProfilesX_U_uw.png')
-	
-	# normalized with local surface flux
-	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
-	ax.plot(UW_c/NormC,Z/zi_c,c='b',ls='--',label='refC')	
-	ax.plot(UW_w/NormW,Z/zi_w,c='r',ls='--',label='refW')
-	for kx in range(0,len(X_liste)):
-		ax.plot( flux_uw_hand[:,indx[kx]]/dsmean.u_star[indx[kx]]**2,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
-	ax.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-	ax.xaxis.major.formatter._useMathText = True	
-	ax.set_ylabel(title_alti)
-	ax.set_xlabel(r"< uw >(x)/$u^{*2}$(x)")
-	ax.vlines(0,0,2000,colors='grey',ls='--')
-	ax.legend(fontsize=8,loc='upper right')
-	ax.set_ylim(bornesZ)
-	ax.set_xlim([-1.5,0.3])
-	fig.savefig(path_save+'ProfilesX_U_uw_atX.png')
-
-def PROFILES_AT_X_RV_WRVFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,E0_atX,NORM,crit_value,path_save,dpi):
-	"""This procedure plot the profiles of RV and the total turbulent vertical flux of rvw.
-		1 color for cold part, 1 color for warm part. Base on the 'crit_value' the separate domains 
-		where the SST is "cold" to where it is "warm"
-		
-		INPUTS: TBD
-	"""
-	ind_E0_atX = np.argmin(np.abs(X.values-E0_atX))
-	indt_c = -1 # app. the same instant as S1
-	indt_w = -1 # app. the same instant as S1
-	ABLH=600 # m
-	zi,zi_c,zi_w = (  ABLH, 
-			dsref['cold']['nomean']['Misc']['BL_H'].values[indt_c],  #  max of Dtheta/dz
-			dsref['warm']['nomean']['Misc']['BL_H'].values[indt_w]   ) # max of Dtheta/dz
-
-	RV_c = dsref['cold']['nomean']['Mean']['MEAN_RV'][indt_c,:]
-	RV_w = dsref['warm']['nomean']['Mean']['MEAN_RV'][indt_w,:]
-
-	RVW_c = ( dsref['cold']['nomean']['Resolved']['RES_WRV'] + dsref['cold']['nomean']['Subgrid']['SBG_WRT'] )[indt_c,:] # here RT = RV, no clouds 
-	RVW_w = ( dsref['warm']['nomean']['Resolved']['RES_WRV'] + dsref['warm']['nomean']['Subgrid']['SBG_WRT'] )[indt_w,:]
-	flux_RVW_hand = dsflx.FLX_RvW
-	RV_hand = dsmean.RVTm
-	
-	
-	indx = []
-	for kx in range(len(X_liste)):
-		indx.append(np.argmin(np.abs(X.values-X_liste[kx])))
-	E0 = np.abs(dsmean.E0[ind_E0_atX])
-	map1 = 'winter'
-	map2 = 'Reds'
-	#dataSST = dsB.SST[0,1,nhalo:-nhalo].values
-	if NORM:
-		normFLX=E0
-		NormC = np.abs(RVW_c[0])
-		NormW = np.abs(RVW_w[0])
-		borne_flx = [-0.1,2]
-		bornesZ = [0,1.1]
-		title_flx = r"< r$_v$w >/$E^{*}$"
-		title_alti = 'z/zi'
-		print('	E0_C,E0_W:',np.sqrt(NormC).values,np.sqrt(NormW).values)
-		print('	zi_c,zi_w:',zi_c,zi_w)
-	else:
-		normFLX=1
-		QV_c,QV_w = 1,1
-		zi,zi_w,zi_c = 1,1,1
-		bornesZ = [0,700]
-		borne_flx = [-0.005,0.025] # to be modified
-		title_flx = r"< r$_v$w > (kg.kg$^{-1}$.m.s$^{-1}$)"
-		title_alti = 'Altitude (m)'
-	
-	
-	colorsX = DISCRETIZED_2CMAP_2(map1,map2,X_liste,dataSST,crit_value,X.values)	
-	fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
-	ax[0].plot(RV_c*1000,Z/zi_c,c='b',ls='--',label='refC')	
-	ax[0].plot(RV_w*1000,Z/zi_w,c='r',ls='--',label='refW')	
-	ax[1].plot(RVW_c/NormC,Z/zi_c,c='b',ls='--',label='refC')	
-	ax[1].plot(RVW_w/NormW,Z/zi_w,c='r',ls='--',label='refW')
-	for kx in range(0,len(X_liste)):
-		ax[0].plot( RV_hand[:,indx[kx]]*1000,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' ) # [:-1]
-		ax[1].plot( flux_RVW_hand[:,indx[kx]]/normFLX,Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
-	ax[1].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-	ax[1].xaxis.major.formatter._useMathText = True	
-	ax[0].set_ylabel(title_alti)
-	ax[0].set_xlabel(r'< r$_v$ > (g.kg$^{-1}$)')
-	ax[1].set_xlabel(title_flx)
-	ax[0].set_ylim(bornesZ)
-	ax[1].set_ylim(bornesZ)
-	ax[0].set_xlim([8,12]) # 
-	ax[1].vlines(0,0,2000,colors='grey',ls='--')
-	ax[1].set_xlim(borne_flx)
-	ax[0].legend(fontsize=8,loc='upper right')
-	fig.savefig(path_save+'ProfilesX_RV_RVW.png')
-	
-	# normalized with local surface flux
-	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
-	ax.plot(RVW_c/NormC,Z/zi_c,c='b',ls='--',label='refC')	
-	ax.plot(RVW_w/NormW,Z/zi_w,c='r',ls='--',label='refW')
-	for kx in range(0,len(X_liste)):
-		ax.plot( flux_RVW_hand[:,indx[kx]]/dsmean.E0[indx[kx]],Z/zi,c=colorsX[kx],label='x='+str(np.round(X[indx[kx]].values/1000,1))+'km' )
-	ax.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-	ax.xaxis.major.formatter._useMathText = True	
-	ax.set_ylabel(title_alti)
-	ax.set_xlabel(r"< r$_v$w >(x)/$E^{*}$(x)")
-	ax.vlines(0,0,2000,colors='grey',ls='--')
-	ax.legend(fontsize=8,loc='upper right')
-	ax.set_ylim(bornesZ)
-	ax.set_xlim([-0.1,1.4])
-	fig.savefig(path_save+'ProfilesX_RV_RVW_atX.png')	
-
-def PROFILES_AT_X_THT_THWFLX(nhalo,dsB,dsBU,dsflx,dsmean,res,X,Z,DX,crit_value,path_save,dpi):
-	"""This procedure plot the profiles of tht and the total turbulent vertical flux of tht.
-		1 color for cold part, 1 color for warm part. The 'crit_value' separates domains 
-		where the SST is "cold" to where it is "warm"
-	"""
-
-	IDX = DX//res
-#	crit_value = 296.25 # K
-	map1 = 'Blues'
-	map2 = 'Reds'
-	dataSST = dsB.SST[0,1,nhalo:-nhalo].values
-	flux_wtht_hand = dsflx.FLX_THW
-	tht_hand = dsmean.THTm
-	colorsX = DISCRETIZED_2CMAP(map1,map2,IDX,dataSST,crit_value,dsB.ni[nhalo:-nhalo].values)	
-	fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
-	for x in range(0,len(X),IDX):
-		ax[0].plot( tht_hand[:,x],Z,c=colorsX[x//IDX],label='x='+str(np.round(X[x].values/1000,0))+'km' ) # [:-1]
-		ax[1].plot( flux_wtht_hand[:,x],Z,c=colorsX[x//IDX] )
-	ax[1].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-	ax[1].xaxis.major.formatter._useMathText = True	
-	ax[0].set_ylabel('Altitude (m)')
-	ax[0].set_xlabel(r'< $\theta$ >')
-	ax[1].set_xlabel(r"< $\overline{w'\theta'}$ >")
-	ax[0].set_ylim([0,700])
-	ax[1].set_ylim([0,700])
-	ax[0].set_xlim([295.5,296]) #295,296
-	ax[1].vlines(0,0,2000,colors='grey',ls='--')
-	ax[1].set_xlim([-0.02,0.01])
-	ax[0].legend(fontsize=8)
-	fig.suptitle(r"Profils (x) of $\theta$ and $\overline{\theta'w'}$")
-	fig.savefig(path_save)	
-	
 def RH_SLICE(dsB,time,nhalo,path_save,dpi):
 	"""This procedure is plotting the relative humidity of the mean field
 	"""	
@@ -1221,7 +2086,7 @@ def TIME_EVOLUTION_PROGVAR_PROFILES_2(X,Z,dsO,dsref,dsmean,step,dt,path_save,dpi
 	print('	plotting '+VAR+' ...')
 	dic_bornes = {'W':[-0.017,0.004],'U':[5.5,7.6],'V':[-1.5,0],'TH':[294.8,296.2],'THTv':[297.2,298.2],'RVT':[8,13],'gTHTv':[-0.005,0.005]}
 	dic_units = {'W':'m/s','U':'m/s','V':'m/s','TH':'K','THTv':'K','RVT':'g/kg','gTHTv':'K/m'}
-	cmap = mpl.colormaps.get_cmap(CMAP)
+	cmap = mpl.colormaps.get_cmap(cmap)
 	indt_w = -1
 	indt_c = -1 # time index of is the last instant
 	N = dsO.time.shape[0]
@@ -1242,6 +2107,7 @@ def TIME_EVOLUTION_PROGVAR_PROFILES_2(X,Z,dsO,dsref,dsmean,step,dt,path_save,dpi
 	THW_FLX = dsO['THW_FLX'].interp({'level_w':dsO.level})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
 	RCONSW_FLX = dsO['RCONSW_FLX'].interp({'level_w':dsO.level})[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
 	THTV = Compute_THTV(dsO)[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo].mean(dim=['nj'])
+	THT = dsO.THT[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
 	L_zi = np.zeros((N//step,len(X))) 	# size= size(X)
 	L_wstar = np.ones((N//step,len(X))) 	# size= size(X)
 	L_Q0 = np.zeros((N//step,len(X))) 	# size= size(X)
@@ -1347,7 +2213,6 @@ def TIME_EVOLUTION_PROGVAR_PROFILES_2(X,Z,dsO,dsref,dsmean,step,dt,path_save,dpi
 	ax[0].legend(loc='upper left')
 	fig.savefig(path_save+VAR+'_Zprofiles_at_t_NORM.png')
 
-	
 def TIME_EVOLUTION_ET_PROFILES(X,Z,step,dt,dsO,dsmean,dsref,CMAP,path_save,dpi,ZONES):
 	"""This procedure plots the evolution of total turbulent kinetic energy in time,
 		every 'step'x5min as SOURCE=='OUTPUT'
@@ -1518,16 +2383,6 @@ def TIME_EVOLUTION_ABLH(dsmean,DATA,PERIOD,DT,LISTE,X,Z,CMAP,path_save,dpi):
 	
 	
 	# KEEP THE FOLLOWING, to be cleaned	
-#		#ax2.plot(X_time,ABLH2,c=cmap(k/len(LISTE)),label=case)
-#		
-#	ax2.set_title('Time evolution of ABLH')
-#	ax2.set_ylabel('Altitude (m)')
-#	ax2.set_xlabel('Time (h)')
-#	ax2.legend(loc='upper right')
-#	fig2.savefig(path_save+'TimeEvolution_ABLH_all.png')
-	
-	# p_fitted = np.polynomial.Polynomial.fit(x, y, deg=1)
-
 	
 def SKEWNESS_W_FLUC(X,Y,Z,Time,dsO,dsmean,dsflx,nhalo,Tstart,Tstop,window,manual_label,path_save,dpi):
 	"""This procedure plots the assimetry parameter (skewness) of the distribution
@@ -1590,7 +2445,6 @@ def ANOMALY_WIND_AND_W_PRESS(X,Z,dsmean,ds_hbudget,w_press_levels,path_save,cmap
 	ax.set_xlabel('X (km)')
 	ax.set_ylabel('Altitude (m)')
 	ax.set_title('w_press')
-	
 	
 def ANOMALY_WIND_AND_THTV(X,Z,dsmean,dsINI,theta_levels,path_save,cmapU,dpi):
 	Ylabel='Altitude (m)'
@@ -1674,31 +2528,6 @@ def T_OVERSHOOT_FLX_WTHTV(X,Z,dataSST,dsflx,dsmean,liste_x,Q0_atX,path_save,dpi)
 	fig.savefig(path_save+'flx_uw.png')
 
 	# ET plot
-#	axes = []
-#	fig = plt.figure(figsize = (10,5),dpi=dpi)
-#	ax1 = plt.subplot(2,1,1)
-#	s = ax1.pcolormesh(X/1000,Z/zi,ET,cmap='rainbow',vmin=bornesET[0],vmax=bornesET[1])
-#	Add_SST_bar(X/1000,Z/zi,3,SST,ax1)
-#	plt.colorbar(s,ax=ax1)
-#	ax1.set_ylim(bornesZ)
-#	ax1.set_title(nameET)
-#	axes.append(ax1)
-#	for k,x in enumerate(liste_x):
-#		axes.append(plt.subplot(2,len(liste_x),len(liste_x)+k+1))
-#		axes[k+1].plot(ET[:,indx[k]],Z/zi,c='k') 
-#		axes[k+1].set_xlim(bornesET)
-#		axes[k+1].vlines(0,0,2000,color='grey',linestyle='--')
-#		axes[k+1].set_ylim(bornesZ)
-#		axes[k+1].set_title('X='+str(x)+'km',loc='right')
-#		axes[k+1].ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-#		axes[k+1].xaxis.major.formatter._useMathText = True	
-#		if k>0:
-#			axes[k+1].tick_params(axis='both',labelleft=False)
-#	axes[1].set_ylabel(nameZ)
-#	axes[0].set_ylabel(nameZ)
-#	axes[0].set_xlabel('X (km)')
-#	plt.tight_layout()
-#	fig.savefig(path_save+'ET.png')
 
 def PLOT_FLUXES(X,Z,liste_x,liste_z,dsflx,dsref,B_FLXTOTAL,B_HEIGHT_OF_SWITCH,path_save,dpi):
 	"""This procedure is giving a first look of the fluxes,
@@ -2209,326 +3038,7 @@ def Explain_lag_correlation_DMM(atZ,lag,X,Z,VAR,dsmean,dsB,dpi,path_save):
 	ax.set_ylabel(r'$\frac{ \bigtriangledown U(x-lag).\bigtriangledown SST(x)}{<\bigtriangledown U(x-lag).\bigtriangledown SST(x)>_x}$ (%)')
 	ax.set_xlabel('X (km)')
 	fig.savefig(path_save+'Corr_at'+str(lag)+'.png')	
-					
-def Corr_atZ_AllInOne(X,Z,dsmean,SST,CHOICE,D_VAR,D_SST,S_SST,atZ,V_INTEG,UPFRONT_ONLY,PRESET,res,path_save,dpi):
-	"""
-	Compute the normalized correlation between 'CHOICE' and derivatives of SST
-	
-	INPUT:
-		- X 		: X dimension of S1
-		- Z 		: Z dimension of S1
-		- dsmean	: dataset with mean fields
-		- SST		: SST 1D field
-		- CHOICE	: what variable to compute the correlation
-		- D_VAR		: order of derivative for VAR
-		- D_SST		: order of derivative for SST
-		- S_SST		: sign of SST, 1 is positive, -1 is negative
-		- atZ		: height for VAR
-		- V_INTEG	: weither to compute vertically integrated value or not
-		- UPFRONT_ONLY : compute correlation with only the 1st front
-		- PRESET	: premade setup (PA,DMM,LA13)
-		- res		: horizontal resolution
-		- path_save	: where to save figures
-		- dpi		: for figures
-	
-	OUTPUTS:
-		- a plot of Corr(VAR,SST) vs lag, with index of max of lag
-		- a plot with the variable used and the SST shifted
-	"""
-
-	if PRESET=='DMM':
-		CHOICE = 'Um'
-		D_VAR = 1
-		D_SST = 1
-		S_SST = 1
-		atZ = 10
-		V_INTEG = False
-	elif PRESET=='PA':
-		CHOICE = 'Um'
-		D_VAR = 1
-		D_SST = 2 
-		S_SST = -1
-		atZ = 10
-		V_INTEG = True
-	elif PRESET=='LA13': # like Lambaerts 2013
-		CHOICE = 'Wm'
-		D_VAR = 0
-		D_SST = 2
-		S_SST = -1
-		atZ = 300
-		V_INTEG = False
-	elif PRESET=='DMMtau':
-		CHOICE = 'Tau'
-		D_VAR = 1
-		D_SST = 1
-		S_SST = 1
-		atZ = 10
-		V_INTEG = False
-	indz = nearest(Z.values,atZ)	
-	#
-	# > Variable selector	 (TBD: include momentum budget term for ex.)	
-	if CHOICE in ['Um','Vm','Wm']:
-		if V_INTEG:
-			VAR = 1/ABLH_S1 * dsmean[CHOICE][:,:].integrate('level')
-			string_integ = 'integ'
-		else:
-			VAR =  dsmean[CHOICE][indz,:]
-			string_integ = str(atZ)
-	elif CHOICE in ['Tau','u_star']:
-		VAR = dsmean[CHOICE]
-		string_integ = ''	
-	#
-	# > getting VAR
-	if D_VAR==0:
-		#VAR = dsmean[CHOICE][indz,:]
-		name,nicename = CHOICE, CHOICE
-	elif D_VAR==1:
-		#VAR = dsmean[CHOICE][indz,:].differentiate('ni')
-		VAR = VAR.differentiate('ni')
-		name,nicename = 'g'+CHOICE, r'$\bigtriangledown$'+CHOICE
-	elif D_VAR==2:
-		#VAR = dsmean[CHOICE][indz,:].differentiate('ni').differentiate('ni')
-		VAR = VAR.differentiate('ni').differentiate('ni')
-		name,nicename = 'gg'+VAR, r'$\bigtriangleup$'+CHOICE
-	#	
-	# >getting SST variable	
-	if D_SST==0:
-		X1 = SST
-		nameSST,nicenameSST = 'SST', 'SST'
-	if D_SST==1:
-		X1 = SST.differentiate('ni')
-		nameSST,nicenameSST = 'gSST', r'$\bigtriangledown$SST'
-	elif D_SST==2:
-		X1 = SST.differentiate('ni').differentiate('ni')
-		nameSST,nicenameSST = 'ggSST', r'$\bigtriangleup$SST'
-		
-	if S_SST==-1:
-		X1 = -X1	
-		nameSST,nicenameSST = '-'+nameSST,'-'+nicenameSST
-	
-	if UPFRONT_ONLY:
-		name_front = 'CtoW'
-	else:
-		name_front = 'CtoW_WtoC'
-	
-	
-	name_bundle = name+string_integ+'_'+nameSST
-	Savename_SST = 		path_save + name_front + '_SSTonly_'+ name_bundle
-	Savename_corr = 	path_save + name_front + '_Corr_'	+ name_bundle
-	Savename_Shifted = 	path_save + name_front + '_Shifted_'+ name_bundle
-	Savename_Var_vs_X1 = path_save + name_front + '_VS_'	+ name_bundle
-	Savename_RegLin = 	path_save + name_front + '_RegLin_'	+ name_bundle
-	
-	
-	if PRESET=='paper':
-	
-		SaveName = path_save + name_front + '_gU10_gTau_vs_gSST.png'
-		atZ = 10 # m
-		XMAX = 23 # km
-		
-		indz = nearest(Z.values,atZ)	
-		VAR1 = dsmean['Um'][indz,:].differentiate('ni')
-		VAR2 = dsmean['Tau'].differentiate('ni')
-		name1,nicename1 = 'gU10', r'$\partial_x$U$_{10}$'
-		name2,nicename2 = 'gTau', r'$\partial_x \tau$'
-		X1 = SST.differentiate('ni')
-		nameSST,nicenameSST = 'gSST', r'$dSST$/$dx$' # r'$\frac{dSST}{dx}$'
-		
-		indx_borne = nearest(X.values,23*1000)
-		X1[200:] = X1[200] 		# only the first front
-		X1 = X1[:indx_borne] 	# size = indx_borne
-		VAR1 = VAR1[:indx_borne]
-		VAR2 = VAR2[:indx_borne]
-		
-		rho1 = RCorr_nocyclic(VAR1.values,X1.values)
-		indlag1 = np.argmax(rho1)
-		X1_rolled1 = np.roll(X1,indlag1)
-		print('corr max for gU10 is ',np.max(rho1))
-		print('lagmax for gU10 is ',indlag1*res/1000,'km')
-		rho2 = RCorr_nocyclic(VAR2.values,X1.values)
-		indlag2 = np.argmax(rho2)
-		X1_rolled2 = np.roll(X1,indlag2)
-		print('corr max for gTau is ',np.max(rho2))
-		print('lagmax for gTau is ',indlag2*res/1000,'km')
-		
-		fig, ax = plt.subplots(1,1,figsize = (5.5,3),constrained_layout=True,dpi=dpi)
-		ax3 = ax.twinx()
-		ax2 = ax.twinx()
-		ax2.spines.right.set_position(("axes", 1.23))
-		
-		p3 = ax.plot(X[:indx_borne]/1000,VAR1.values*1e5,c='b')
-		p2 = ax2.plot(X[:indx_borne]/1000,VAR2.values*1e6,c='g')
-		#p1 = ax.plot(X[:indx_borne]/1000,np.roll(X1,indlag1)*1e4,c='k',label='lag='+str(indlag1*res/1000)+'km')
-		#ax3.plot(X[:indx_borne]/1000,np.roll(X1,indlag2),c='grey',label='lag='+str(indlag2*res/1000)+'km, R='+str(np.max(rho2)) )
-		p1 = ax.plot(X[:indx_borne]/1000,X1*1e4,c='k',ls='-',label='no lag')
-		
-		ax.set_xlabel('X (km)')
-		ax3.set_ylabel(nicename1) #+ r' (10$^{-5}$ s$^{-1}$)')
-		ax2.set_ylabel(nicename2) #+ r' (10$^{-6}$ N.m$^{-3}$)')
-		ax.set_ylabel(nicenameSST)# + r' (10$^{-4}$ K.m$^{-1}$)')
-		
-		ax.yaxis.label.set_color(p1[0].get_color())
-		ax2.yaxis.label.set_color(p2[0].get_color())
-		ax3.yaxis.label.set_color(p3[0].get_color())
-
-		ax.tick_params(axis='y', colors=p1[0].get_color())
-		ax2.tick_params(axis='y', colors=p2[0].get_color())
-		ax3.tick_params(axis='y', colors=p3[0].get_color())
-		
-		ax.set_xlim([0,23])
-		
-		for axe in [ax,ax2,ax3]:
-			yabs_max = abs(max(axe.get_ylim(), key=abs))
-			axe.set_ylim(ymin=-yabs_max/2, ymax=yabs_max)
-		
-		#ax.legend()		
-		fig.savefig(SaveName)
-		
-	else:	
-		if UPFRONT_ONLY:
-			# here only the cold-to-warm is taken into account
-			# > cutting SST
-			XMAX = 23 # km
-			indx_borne = nearest(X.values,23*1000)
-			X1[200:] = X1[200] 		# only the first front
-			X1 = X1[:indx_borne] 	# size = indx_borne
-			VAR = VAR[:indx_borne]
-			# > Correlation
-			rho = RCorr_nocyclic(VAR.values,X1.values)
-			indlag = np.argmax(rho)
-			X1_rolled = np.roll(X1,indlag)
-			print('corr max is ',np.max(rho))
-			print('lagmax is ',indlag*res/1000,'km')
-			# > linear regression
-			
-			
-			# > Plot
-			colorsX = DISCRETIZED_2CMAP_2('winter','plasma',X[:indx_borne].values,SST[:indx_borne].values,297.3,X[:indx_borne].values)
-			# SST
-			fig, ax = plt.subplots(1,1,figsize = (3,3),constrained_layout=True,dpi=dpi)
-			ax.scatter(X[:indx_borne]/1000,SST[:indx_borne],marker='x',c=colorsX)
-			ax.set_xlabel('X (km)')
-			ax.set_ylabel('SST')
-			fig.savefig(Savename_SST+'.png')
-			
-			# Correlation coefficient
-			fig, ax = plt.subplots(1,1,figsize = (3,3),constrained_layout=True,dpi=dpi)
-			ax.plot(X[:indx_borne]/1000,rho)
-			ax.set_ylabel('rho')
-			ax.set_xlabel('lag')
-			ax.set_title('imax='+str(indlag)+' CorrMax='+str(np.round(rho[indlag],2)))
-			fig.savefig(Savename_corr+'.png')
-			
-			# VAR and SST Shifted vs X
-			fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-			ax.scatter(X[:indx_borne]/1000,VAR.values,marker='x',c=colorsX)
-			ax2 = ax.twinx()
-			ax2.plot(X[:indx_borne]/1000,np.roll(X1,indlag),c='k',label='lag='+str(indlag*res/1000)+'km')
-			if PRESET=='DMMtau':
-				ax2.plot(X[:indx_borne]/1000,X1,c='k',ls='--',label='no lag')
-			ax.set_xlabel('X (km)')
-			ax.set_ylabel(nicename)
-			ax2.set_ylabel(nicenameSST)
-			yabs_max = abs(max(ax.get_ylim(), key=abs))
-			ax.set_ylim(ymin=-yabs_max, ymax=yabs_max)
-			yabs_max = abs(max(ax2.get_ylim(), key=abs))
-			ax2.set_ylim(ymin=-yabs_max, ymax=yabs_max)
-			ax2.legend()
-			fig.savefig(Savename_Shifted+'.png')
-			
-			# VAR vs X1
-			fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-			ax.scatter(np.roll(X1,indlag),VAR.values,marker='x',c=colorsX)
-			ax.set_xlabel(nicenameSST+' shifted')
-			ax.set_ylabel(nicename)
-			fig.savefig(Savename_Var_vs_X1+'.png')
-			fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-			ax.scatter(X1,VAR.values,marker='x',c=colorsX)
-			ax.set_xlabel(nicenameSST+' no shift')
-			ax.set_ylabel(nicename)
-			
-			# linear regression
-			if PRESET=='DMM' or PRESET=='DMMtau':
-				seuilGradSST = 1e-4
-				VAR_reg = np.ma.masked_where( np.abs(X1_rolled) < seuilGradSST, VAR)
-				X1_reg = np.ma.masked_where( np.abs(X1_rolled) < seuilGradSST, X1_rolled)
-				a, b, r, p_value, std_err = linregress(X1_reg.compressed(),VAR_reg.compressed() )
-				print('linear regression:')
-				print("a   ={:8.5f},b   ={:8.3f},r^2 ={:8.5f}".format(a, b, r**2))				
-				fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-				ax.scatter(X1_reg.compressed(),VAR_reg.compressed(),marker='x',c='k')
-				ax.plot(X1_reg.compressed(), a*X1_reg.compressed() + b,c='r',label="y={:8.5f}x+b,r^2={:8.5f}".format(a, r**2))
-				ax.set_xlabel(nicenameSST+' (shifted) gradSST>'+str(seuilGradSST))
-				ax.set_ylabel(nicename)
-				ax.legend()
-				fig.savefig(Savename_RegLin+'.png')
-				
-				if PRESET=='DMMtau':
-					seuilGradSST = 2e-4
-					VAR_reg = np.ma.masked_where( np.abs(X1) < seuilGradSST, VAR)
-					X1_reg = np.ma.masked_where( np.abs(X1) < seuilGradSST, X1)
-					a, b, r, p_value, std_err = linregress(X1_reg.compressed(),VAR_reg.compressed() )
-					print('linear regression at no lag:')
-					print("a   ={:8.5f},b   ={:8.3f},r^2 ={:8.5f}".format(a, b, r**2))
-					fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-					ax.scatter(X1_reg.compressed(),VAR_reg.compressed(),marker='x',c='k')
-					ax.plot(X1_reg.compressed(), a*X1_reg.compressed() + b,c='r',label="y={:8.5f}x+b,r^2={:8.5f}".format(a, r**2))
-					ax.set_xlabel(nicenameSST+' gradSST>'+str(seuilGradSST))
-					ax.set_ylabel(nicename)
-					ax.legend()
-		else:
-			# here the cold-to-warm and warm-to-cold are taken into account
-			# Note : linear regression has not meaning in this case (see plot VAR vs XA)
-			
-			# > computing normalized correlation
-			Corr_coef = RCorr_cyclic(VAR.values,X1.values)
-			imax = np.argmax(Corr_coef)
-			print('	lag at max correlation is:',imax*res/1000,'km')
-			# > Shifting SST
-			Shifted_SST = np.zeros(len(SST))
-			Shifted_SST[imax: ] = X1[0:len(SST)-imax]
-			Shifted_SST[:imax] = X1[len(SST)-imax:]
-			
-			# > Plots
-			# Correlation
-			fig, ax = plt.subplots(1,1,figsize = (3,3),constrained_layout=True,dpi=dpi)
-			ax.plot(X/1000,Corr_coef,c='k')
-			ax.set_xlabel('X lag (km)')
-			ax.set_xlim([0,38.4])
-			ax.set_ylim(-1,1)
-			ax.hlines(0.5,0,40,colors='r')
-			ax.hlines(-0.5,0,40,colors='r')
-			ax.set_ylabel('Corr('+nicename+','+nicenameSST+')')
-			ax.set_title('imax='+str(imax)+' CorrMax='+str(np.round(Corr_coef[imax],2)))
-			fig.savefig(Savename_corr+'.png')
-				
-			# VAR and SST Shifted vs X
-			fig, ax = plt.subplots(1,1,figsize = (7,5),constrained_layout=True,dpi=dpi)
-			ax.plot(X[0]/1000,VAR[0],c='b',label=nicenameSST) # dummy 
-			ax.plot(X[0]/1000,VAR[0],c='r',label=nicenameSST+' shifted') # dummy 
-			ax.plot(X/1000,VAR,c='k',label=nicename)
-			ax2 = ax.twinx()
-			ax2.plot(X/1000,X1,c='b',label=nicenameSST)
-			ax2.plot(X/1000,Shifted_SST,c='r',label=nicenameSST+' shifted')
-			ax.set_xlabel('X (km)')
-			ax.set_ylabel(nicename)
-			ax2.set_ylabel(nicenameSST)
-			ax.legend()
-			fig.savefig(Savename_Shifted+'.png')	
-			
-			# Note: this plot has no meaning, to be replaced with VAR vs X1
-			# Relation coefficient at max correlation lag
-	#		fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-	#		ax.plot(X/1000,alpha,c='k')
-	#		ax.set_xlim([0,38.4])
-	#		ax.set_ylim([0,0.5])
-	#		ax.set_xlabel('X (km)')
-	#		ax.set_ylabel(r'$\alpha$')
-	#		ax.set_title(nicename + r'= $\alpha$' + nicenameSST)
-	#		fig.savefig(path_save+'regCoeff_'+string_integ+name+'_'+nameSST+'_atz'+str(atZ)+'m.png')	
-	
-	
-	
+						
 def HODOGRAPH_t(dsO_t,cmap,atX,X,atZ,Z,step,dpi,path_save):
 	"""This procedure is plotting a graph with U as X and V as Y, at differents instants.
 	"""
@@ -2622,154 +3132,6 @@ def TIME_EVOLUTION_TA_wtht(dsO,dsB,X,nameds,nhalo,path_save,dpi):
 	ax[1].set_ylim([-0.015,0.005])
 	fig.savefig(path_save+'TimeEvolution_Ta_WTHflx_'+nameds+'.png')
 	
-	
-def IBL_visualisation(dsmean,dicVAR,X,Z,names,units,CHOICE,manual_label,path_save,dpi):
-	"""This procedure is testing different ways to visualize internal boundary layers,
-		thermal or dynamical.
-	
-		- with dtht/dz = cst
-		- TBD : with dTKET/dz = cst
-		- TBD : with dU/dz = cst
-		
-		dsmean : contains mean fields
-		dicVAR : contains the value of the contour for each variable
-		names : is the fancy name for writing on the plot the variable
-		units : is the unit of the variable
-		CHOICE : is a string representing a variable that is in dicVAR
-		manual_label : to place by hand the contour value (mess up the figsize)
-		path_save : where to save the plots
-	"""
-	gradientZ = np.gradient(dsmean[CHOICE+'m'],Z,axis=0)
-	CRIT = dicVAR[CHOICE]
-	# Example with Um in background
-	fig, ax = plt.subplots(1,1,figsize = (7,5),constrained_layout=True,dpi=dpi)		
-	s = ax.pcolormesh(X/1000,Z,dsmean.Um,cmap='rainbow',vmin=6,vmax=7.5) #
-	plt.colorbar(s,ax=ax)
-	CS = ax.contour(X/1000,Z,gradientZ,levels=[-CRIT,0,CRIT],colors=['grey'],linestyles='--',linewidths=1.0)
-	#CS = ax.contour(X/1000,Z,gradientZ,levels=0,colors=['grey'],linestyles='--',linewidths=1.0)
-	ax.clabel(CS, inline=True, fontsize=8,inline_spacing=2.5,manual=manual_label)
-	ax.set_xlabel('X (km)')
-	ax.set_ylabel('Altitude (m)')
-	ax.set_title(r'Um with IBLs at d'+names[CHOICE]+'/dz='+str(CRIT)+' '+units[CHOICE]+'/m')
-	ax.set_ylim([0,600])
-	fig.savefig(path_save+'Um_with_'+CHOICE+'_IBLs.png')
-	# Zones of gradientZ
-	fig, ax = plt.subplots(1,1,figsize = (7,5),constrained_layout=True,dpi=dpi)		
-	s = ax.contourf(X/1000,Z,gradientZ,levels=[-CRIT,0,CRIT],colors=['red','orange','grey','blue'],extend='both')
-	#s = ax.contourf(X/1000,Z,gradientZ,levels=0,colors=['red','blue'],extend='both')
-	plt.colorbar(s,ax=ax)
-	ax.set_xlabel('X (km)')
-	ax.set_ylabel('Altitude (m)')
-	ax.set_title(r'd'+names[CHOICE]+'/dz '+units[CHOICE]+'/m')
-	ax.set_ylim([0,600])
-	fig.savefig(path_save+'g'+CHOICE+'_zones.png')
-	# XZ plot of dVAR/dz
-	fig, ax = plt.subplots(1,1,figsize = (7,5),constrained_layout=True,dpi=dpi)
-	s = ax.pcolormesh(X/1000,Z,gradientZ,cmap='rainbow')
-	plt.colorbar(s,ax=ax)
-	ax.set_xlabel('X (km)')
-	ax.set_ylabel('Altitude (m)')
-	ax.set_ylim([0,600])
-	ax.set_title('Vertical gradient of '+CHOICE)
-	
-	# TO BE TESTED : CRITERION ON TOTAL TKE
-	
-	#	OLD STUFF BUT MIGHT STILL BE RELEVANT
-#	VAR='THTm' # THTm Um THTvm
-#	gradref = np.gradient(dsmean[VAR].mean(axis=1),Z,axis=0)
-#	gradref = xr.DataArray(data=gradref,coords={'level':Z},name='gradUref')
-#	gradref = gradref.expand_dims(dim={"ni":X.values},axis=1)
-#	grad = np.gradient(dsmean[VAR],Z,axis=0)
-#	Delta = grad - gradref
-#	fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)	
-#	levels = np.linspace(-0.001,0.001,21)
-#	#s = ax.pcolormesh(X/1000,Z,Delta,cmap='rainbow',vmin=-0.0001,vmax=0.0001)
-#	s = ax.contourf(X/1000,Z,Delta,cmap='rainbow',levels=levels,extend='both')
-#	plt.colorbar(s,ax=ax)
-#	s = ax.contour(X/1000,Z,Delta,colors='grey',levels=[0],extend='both',nchunk=0,linestyles='dashed')
-#	ax.set_xlim([X[0]/1000,X[-1]/1000])
-#	ax.set_ylim([0,600])
-#	ax.set_xlabel('X (km)')
-#	ax.set_ylabel('Altitude (m)')
-#	ax.set_title('IBL visualisation : '+VAR)
-	
-	
-
-
-	
-def Sampling_rate_tests(X,Y,Z,Z_w,datasets,Tstart,Tstop,window,path_sampl,dpi):
-	"""Testing wether avering over 1h with one outpur every 30s is sufficient or not
-	"""
-	abs_path = '/home/jacqhugo/scripts/simu_canal_across/'
-	DSMEAN,DSFLX,DSHBU = {},{},{}
-	for k,case in enumerate(datasets.keys()):
-		print('	- File with out rate of '+case)
-		ds = datasets[case]
-		n_mean = path_sampl+case+'_mean_fields.nc'
-		n_flx = path_sampl+case+'_flx_fields.nc'
-		n_hbudget = path_sampl+case+'_budget_fields.nc'
-		if not pathlib.Path(n_mean).is_file():
-			print('		building mean fields'+'...')	
-			Build_mean_file('CAS06_SST_is_Tini/FICHIERS_OUT_2h_3h_'+case,ds,dsB,Tstart,Tstop,n_mean,nhalo,window)
-		DSMEAN[case] = xr.open_dataset(n_mean)
-		if not pathlib.Path(n_flx).is_file():
-			print('		building flux fields'+'...')	
-			Build_flx_file('CAS06_SST_is_Tini/FICHIERS_OUT_2h_3h',ds,Tstart,Tstop,DSMEAN[case],n_flx,nhalo,window)
-		DSFLX[case] = xr.open_dataset(n_flx)
-		if not pathlib.Path(n_hbudget).is_file():
-			print('		building budget fields'+'...')	
-			Build_budget_file('CAS06_SST_is_Tini/FICHIERS_OUT_2h_3h'+case,dsB,ds,DSMEAN[case],Tstart,Tstop,n_hbudget,nhalo,window)
-		DSHBU[case] = xr.open_dataset(n_hbudget)
-		print('		done!')	
-	L_VAR=['Um','ETm','u_vturb','FLX_THvW']
-	L_units = ['m/s','m2/s2','m/s2','K.m/s']
-	for k,var in enumerate(L_VAR):
-		print('	-> '+var)
-		if var=='u_vturb':
-			ds = DSHBU
-		elif var=='FLX_THvW':
-			ds = DSFLX
-		else:
-			ds = DSMEAN
-		# colors.LogNorm(vmin=Z.min(), vmax=Z.max())
-		fig1, ax1 = plt.subplots(1,3,figsize = (25,5),constrained_layout=True,dpi=dpi) 
-		s=ax1[0].pcolormesh(X/1000,Z,ds['30s'][var],cmap='rainbow')
-		plt.colorbar(s,ax=ax1[0])
-		s=ax1[1].pcolormesh(X/1000,Z,(ds['60s'][var]-ds['30s'][var])/ds['30s'][var]*100,norm=mpl.colors.LogNorm(vmin=5, vmax=150),cmap='PuRd')
-		plt.colorbar(s,ax=ax1[1])
-		s=ax1[2].pcolormesh(X/1000,Z,(ds['300s'][var]-ds['30s'][var])/ds['30s'][var]*100,norm=mpl.colors.LogNorm(vmin=5, vmax=150),cmap='PuRd')
-		plt.colorbar(s,ax=ax1[2])
-		ax1[0].set_ylabel('Altitude (m)')
-		ax1[1].set_xlabel('X (km)')
-		ax1[0].set_ylim([0,600])
-		ax1[1].set_ylim([0,600])
-		ax1[2].set_ylim([0,600])
-		ax1[0].set_title(var+'30s ('+L_units[k]+')')
-		ax1[1].set_title(var+'60s-'+var+'30s (%)')
-		ax1[2].set_title(var+'300s-'+var+'30s (%)')
-		#fig1.savefig(path_sampl+var+'.png')
-	
-	# TBD : test une moyenne de 30s sans moyenne y
-	print(' * Only Time mean on 1h with file every 30s')
-	atZ = 250
-	indz = np.argmin(np.abs(Z_w.values-atZ))
-	ds30_noY = xr.open_mfdataset([abs_path+'CAS06_SST_is_Tini/FICHIERS_OUT_2h_3h/CAS06.1.002.OUT.'+f"{k:03}"+'.nc' for k in range(1,122,1)])
-	Um = ds30_noY.UT[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo].mean('time')
-	Vm = ds30_noY.VT[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo].mean('time')
-	Wm = ds30_noY.WT[:,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo].mean('time')
-	fig, ax = plt.subplots(3,1,figsize = (25,5),constrained_layout=True,dpi=dpi) 
-	s = ax[0].pcolormesh(X/1000,Y/1000,Um[0,:,:],vmin=3,vmax=5,cmap='Greys_r')
-	plt.colorbar(s,ax=ax[0],orientation='horizontal')
-	ax[0].set_ylabel('Y (km)')
-	s = ax[1].pcolormesh(X/1000,Y/1000,Vm[0,:,:],vmin=-1,vmax=1,cmap='rainbow')
-	plt.colorbar(s,ax=ax[1],orientation='horizontal')
-	ax[1].set_ylabel('Y (km)')
-	s = ax[2].pcolormesh(X/1000,Y/1000,Wm[indz,:,:],vmin=-1,vmax=1,cmap='bwr')
-	plt.colorbar(s,ax=ax[2],orientation='horizontal')
-	ax[2].set_ylabel('Y (km)')
-	ax[2].set_xlabel('X (km)')
-
-
 def check_pressure_consistency(X,Z,dsCS1,dsO,dsB,dsmean,dsINI,atX,atX2,dpi):
 	"""
 		GOAL : Compute the pressure terms in the W budgets (pressure fluctuations from reference state and buoyancy) with differents reference states
@@ -2882,165 +3244,6 @@ def check_pressure_consistency(X,Z,dsCS1,dsO,dsB,dsmean,dsINI,atX,atX2,dpi):
 	ax.set_ylim([0,1.2])
 	ax.set_xlim([297.2,298])
 	ax.legend()
-
-
-def entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save,dpi):
-	"""
-	This procedure is plotting:
-		- mean ABL height (along X)
-		- entrainment velocity (dzi/dt, no large scale sub)
-		- entrainment velocity ( min(wthtv)/delta theta)
-		
-	INPUTS:
-	
-	"""
-	# entrainment velocity = dzi/dt
-	#	-> for ref sims, easy to compute with ABLH(t) from MNH outputs
-	#	-> for S1, we consider taylor's hypothesis : dzi/dt ~ Udzi/dx at every x
-	#		and with U = <Um(zi=600)>x
-	#	-> compared with min(wthtv)/dTHTV with different widths for dTHTV
-	
-	# for smoothing
-	WSIZE = 251 # odd, number of X points
-	ORD = 2 # because dx=cst, 2=3 for smooth and 3=4 for d/dx
-	
-	thtv_hand = dsmean.THTvm
-	wthtv = dsflx.FLX_THvW.min(dim=['level'])
-	wthtv_p = dsflx.FLX_THvW
-	L_indz_minflx = wthtv_p.sel(level=slice(0,900)).argmin('level').values
-	smoothed_flx = savitzky_golay(Z[L_indz_minflx].values, window_size=WSIZE, order=ORD, deriv=0, rate=1/50)
-	# here we test look at time evolution of E = wthtv_min/wthtv(z=0) for ref sims
-	THT_c = dsref['cold']['nomean']['Mean']['MEAN_TH'][:,:]
-	THT_w = dsref['warm']['nomean']['Mean']['MEAN_TH'][:,:]
-	RV_c = dsref['cold']['nomean']['Mean']['MEAN_RV'][:,:]
-	RV_w = dsref['warm']['nomean']['Mean']['MEAN_RV'][:,:]
-	THTV_c = Compute_THTV(THT_c,RV_c)
-	THTV_w = Compute_THTV(THT_w,RV_w)
-	RES_WTHV_c = dsref['cold']['nomean']['Resolved']['RES_WTHV'][:,:]
-	RES_WTHV_w = dsref['warm']['nomean']['Resolved']['RES_WTHV'][:,:]
-	SBG_WTHV_c = THTV_c/THT_c*dsref['cold']['nomean']['Subgrid']['SBG_WTHL'][:,:] + 0.61*THT_c*dsref['cold']['nomean']['Subgrid']['SBG_WRT'][:,:]
-	SBG_WTHV_w = THTV_w/THT_w*dsref['warm']['nomean']['Subgrid']['SBG_WTHL'][:,:] + 0.61*THT_w*dsref['warm']['nomean']['Subgrid']['SBG_WRT'][:,:]
-	WTHV_c = RES_WTHV_c + SBG_WTHV_c
-	WTHV_w = RES_WTHV_w + SBG_WTHV_w
-	time = np.arange(0,121)
-	zi_c,zi_w = dsref['cold']['nomean']['Misc']['BL_H'].values[:],dsref['warm']['nomean']['Misc']['BL_H'].values[:]
-	Ec,Ew = np.zeros(len(time)),np.zeros(len(time))
-	for t in range(len(time)):
-		Ec[t] = ( WTHV_c[119+t,:]/SBG_WTHV_c[119+t,0] ).sel(level_les=slice(0,1.2*zi_c[119+t])).min(dim='level_les')
-		Ew[t] = ( WTHV_w[119+t,:]/SBG_WTHV_w[119+t,0] ).sel(level_les=slice(0,1.2*zi_w[119+t])).min(dim='level_les')
-	we_c = ABLH_refC = (dsref['cold']['mean']['Misc']['BL_H'][-1] - dsref['cold']['mean']['Misc']['BL_H'][0])/3600 # 1,251 cm/s
-	we_w = ABLH_refW = (dsref['warm']['mean']['Misc']['BL_H'][-1] - dsref['warm']['mean']['Misc']['BL_H'][0])/3600 # 1,943 cm/s
-	print('refC we, refW we')
-	print(we_c.values,we_w.values)
-	
-	# Height of ABL along X
-	L_indz = thtv_hand.differentiate('level').sel(level=slice(0,900)).argmax('level').values # altitude of max gradient thtv
-	ABLH_x = Z[L_indz].values
-	Nx = len(ABLH_x)
-	ABLH_x_3 = np.zeros(3*Nx)
-	ABLH_x_3[:Nx] = ABLH_x
-	ABLH_x_3[Nx:2*Nx] = ABLH_x
-	ABLH_x_3[2*Nx:3*Nx] = ABLH_x
-	dHdx = savitzky_golay(ABLH_x_3, window_size=WSIZE, order=ORD, deriv=1, rate=1/50)[Nx:2*Nx] # fake cyclic conditions
-	Uadv = dsmean.Um.sel(level=600,method='nearest').mean(dim='ni').values # for Taylor's hypothesis
-	print('Uadv',Uadv)
-	smoothed = savitzky_golay(ABLH_x, window_size=WSIZE, order=ORD, deriv=0, rate=1/50)
-	
-	# Computing dthtv
-	L_n_inversion = [2,3,4,5] # number of cell around inversion height (ABLH_x) 
-	color = ['cyan','green','orange','purple']
-	deltaTHTV = np.zeros((len(L_n_inversion),Nx))					
-	if CENTER_DTHTV == 'MIN_FLX': # chosing where to compute the dthtv
-		L_mid = L_indz_minflx
-	elif CENTER_DTHTV == 'ABLH':
-		L_mid = L_indz
-	for k,dz in enumerate(L_n_inversion):
-		borne_up = L_mid+dz
-		borne_down = L_mid-dz
-		thtv_z2 = np.diag(thtv_hand[borne_up,:].values)
-		thtv_z1 = np.diag(thtv_hand[borne_down,:].values)
-		deltaTHTV[k,:] =  thtv_z2 -  thtv_z1
-	
-	
-	##### PLOTS
-	
-	# min(wthtv) of reference along time axis
-	fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-	ax.plot(time,Ec,c='b',label='refC')
-	ax.plot(time,Ew,c='r',label='refW')
-	ax.set_xlabel('time')
-	ax.set_ylabel('E')
-	ax.set_title(r"min($w'\theta_v'$) des references")
-	
-	# ABLH and Z[min(wthtv)]
-	fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-	ax.plot(X/1000,ABLH_x,c='grey') # not smoothed
-	ax.plot(X/1000,smoothed,c='k',label='ABLH(x)') # smoothed
-	ax.set_xlabel('X (km)')
-	ax.set_ylabel('altitude')
-	ax.plot(X/1000,Z[L_indz_minflx].values, c='orange')
-	ax.plot(X/1000,smoothed_flx , c='r',label=r'Z[min($w\theta_v$)]') # smoothed 
-	ax.set_title('savgol(w,o,d)=('+str(WSIZE)+','+str(ORD)+',0)')
-	ax.legend()
-	fig.savefig(path_save+'ABL_height_and_smoothed.png')
-	
-	# U.Dzi/DX, we of ref, min(wthtv)/delta_THTV with different width for delta_THTV
-	fig, ax = plt.subplots(1,1,figsize = (10,5),constrained_layout=True,dpi=dpi)
-	ax.hlines( 0,X[0]/1000,X[-1]/1000,colors='grey',linestyles='--')
-	ax.hlines( we_c*100,X[0]/1000,X[-1]/1000,colors='b',label='refC')
-	ax.hlines( we_w*100,X[0]/1000,X[-1]/1000,colors='r',label='refW')
-	ax.plot( X/1000, Uadv*dHdx*100,c='k',label='U.dzi/dx')
-	smoothed_minflx = savitzky_golay(wthtv, window_size=WSIZE, order=ORD, deriv=0, rate=1/50)
-	for k,dz in enumerate(L_n_inversion):
-		ax.plot( X/1000, -wthtv/deltaTHTV[k,:]*100,c=color[k],label=r'$\pm$ '+str(dz)+' cell') # not smoothed
-		#ax.plot( X/1000, -smoothed_minflx/deltaTHTV[k,:]*100,c=color[k],label=r'$\pm$ '+str(dz)+' cell') # smoothed
-	ax.set_xlabel('X (km)')
-	ax.set_ylabel('we (cm/s)')
-	ax.legend()
-	ax.set_title('savgol(w,o,d)=('+str(WSIZE)+','+str(ORD)+',1)')
-	fig.savefig(path_save+'entrainment_rate_'+CENTER_DTHTV+'.png')
-
-	# checking that delta_THTV is well around the altitude of min(wthtv)
-	#	X = 13km
-	indx = nearest(X.values,13*1000)
-	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
-	ax.vlines(0,0,50,colors='grey')
-	ax.plot(thtv_hand[:,indx]-297.7,Z/600,c='k')
-	for k,dz in enumerate(L_n_inversion):
-		borne_up = L_mid[indx]+dz
-		borne_down = L_mid[indx]-dz
-		ax.hlines(Z[borne_up].values/600,-10,10,colors=color[k],ls='-',label=r'\pm '+str(dz)+' cell')
-		ax.hlines(Z[borne_down].values/600,-10,10,colors=color[k],ls='--')
-	ax2 = ax.twiny()
-	ax2.plot(wthtv_p[:,indx],Z/600,c='r')
-	ax.set_xlim([-0.2,0.8])
-	ax2.set_xlim([-0.005,0.02])
-	ax.set_ylim([0,1.5])
-	ax.set_xlabel(r'$\theta_v$-$\theta_{v,mixed}$ and $\Delta \theta_v$')
-	ax2.set_xlabel(r'$<w\theta_v>$ at X=13km')
-	fig.savefig(path_save+'checking_at_X13km'+CENTER_DTHTV+'.png')
-	#	X = 24km
-	indx = nearest(X.values,24*1000)
-	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
-	ax.vlines(0,0,50,colors='grey')
-	ax.plot(thtv_hand[:,indx]-297.7,Z/600,c='k')
-	for k,dz in enumerate(L_n_inversion):
-		borne_up = L_mid[indx]+dz
-		borne_down = L_mid[indx]-dz
-		ax.hlines(Z[borne_up].values/600,-10,10,colors=color[k],ls='-',label=r'\pm '+str(dz)+' cell')
-		ax.hlines(Z[borne_down].values/600,-10,10,colors=color[k],ls='--')
-	ax2 = ax.twiny()
-	ax2.plot(wthtv_p[:,indx],Z/600,c='r')
-	ax.set_xlim([-0.2,0.8])
-	ax2.set_xlim([-0.005,0.02])
-	ax.set_ylim([0,1.5])
-	ax.set_xlabel(r'$\theta_v$ and $\Delta \theta_v$')
-	ax2.set_xlabel(r'$<w\theta_v>$ at X=24km')
-	fig.savefig(path_save+'checking_at_X24km'+CENTER_DTHTV+'.png')
-
-
-
-
 
 def ABLH_convergence(Z,ds1,ds2,ndt,nhalo,path_outpng,dpi):
 	"""
@@ -3205,8 +3408,6 @@ def surface_fluxes(dsB,nhalo,dsmean,dataSST,dpi):
 		ax.set_ylabel(r'U$^2$ (m/s)')
 		ax.grid()
 		ax.set_xlim([0,38.4])
-
-
 
 def K_profiles(X,Z,dsmean,dsflx,dsref,dataSST,crit_value,L_x,path_save,dpi):
 	"""
