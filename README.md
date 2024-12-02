@@ -9,6 +9,18 @@ cold-to-warm and warm-to-cold fronts are located at X = 5 km and X = 25 km respe
 
 ## 1. Introduction 
 
+[1. Introduction ](#1-introduction)
+
+[2. Producing the data](#2-producing-the-data)
+
+[2.1 Installation of MesoNH](#21-installation-of-mesonh)
+
+[2.2 Running the simulations](#22-running-the-simulations)
+
+[3. Plotting the figures](#3-plotting-the-figures)
+
+[Licence and contact](#licence-and-contact)
+
 This repo contains scripts, namlists and everything needed to reproduce figures from the paper "Atmosphere Response To An Oceanic Sub-mesoscale SST Front" avalaible [here](DOI to be added).
 Steps to reproduce the simulations are detailed, but you will need a strong computer ! I used 512 CPUs for the simulations. You can also directly download data from zenodo : [part1](https://zenodo.org/records/13321541), [part2](https://zenodo.org/records/13321835). Scripts and Namlists are also [archived](https://zenodo.org/records/13341468).
 Figures are produced using Python, Xarray and Matplotlib while the simulations were done with MesoNH.
@@ -25,7 +37,7 @@ Diskspace used:
 
 For your information, producing the simulation data emitted 90 kg of equivalent carbon.
 
-The paper has been submitted to JGR: Atmosphere and is under peer review.
+(The paper has been submitted to JGR: Atmosphere and is under peer review.)
 
 ## 2. Producing the data
 ![alt text](http://mesonh.aero.obs-mip.fr/mesonh57/Welcome?action=AttachFile&do=get&target=LogoMesoNH.jpg)
@@ -260,7 +272,7 @@ python analyse.py
 Due to the intrinsec chaotic nature of turbulence, the figure 2 and 7 cannot be reproduced exactly: the small differences of computing architecture introduce slightly different boundary and initial conditions and so the flow instantaneous structure is different.
 Also, please be aware that the figure with the snapshot of two plumes AND the sensibility tests of tau are done with the simulation of width 2km (setting NJMAX=40 instead of NJMAX=160, every other namlist entry is the same.).
 
-## Licence
+## Licence and contact
 
 If you reuse this work, please cite it ! This repository is under MIT license, Zenodo archives are under Creative Commons Attribution 4.0 International license.
 
@@ -271,3 +283,5 @@ Jacquet, H. (2024). Output of simulations for "Atmosphere Response to an Oceanic
 Jacquet, H. (2024). Output of simulations for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis": Part 2 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13321835
 
 Jacquet, H. (2024). Scripts and namlists for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis". Zenodo. https://doi.org/10.5281/zenodo.13341468
+
+If you have a problem with the code, please open an issue. If you want to discuss science, you can contact me at hugo.jacquet.work[at]gmail.com
