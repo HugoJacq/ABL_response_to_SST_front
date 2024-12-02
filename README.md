@@ -257,7 +257,7 @@ python analyse.py
 
 **Notes**
 
-Due to the intrinsec chaotic nature of turbulence, the figure from the appendix A1 and the figure 2 cannot be reproduced exactly: the small differences of computing architecture introduce slightly different boundary and initial conditions and so the flow instantaneous structure is different.
+Due to the intrinsec chaotic nature of turbulence, the figure 2 and 7 cannot be reproduced exactly: the small differences of computing architecture introduce slightly different boundary and initial conditions and so the flow instantaneous structure is different.
 Also, please be aware that the figure with the snapshot of two plumes AND the sensibility tests of tau are done with the simulation of width 2km (setting NJMAX=40 instead of NJMAX=160, every other namlist entry is the same.).
 
 ## Licence
