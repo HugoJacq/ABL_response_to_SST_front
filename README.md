@@ -2,10 +2,7 @@
 
 ![alt text](https://github.com/HugoJacq/ABL_response_to_SST_front/blob/main/06W_LastTime_UVW_XY_rev1.png?raw=true)
 
-**Figure 2.** Snapshot at t=+3h of (a) zonal and (b) meridional wind at first model level and
-(c) vertical velocity in the middle of the ABL. The colored line at the bottom of the panels in-
-dicates the SST with blue representing cold SST (296.55 K) and red warm SST (298.05 K). The
-cold-to-warm and warm-to-cold fronts are located at X = 5 km and X = 25 km respectively
+**Figure 2.** Snapshot at t=+3h of (a) zonal and (b) meridional wind at first model level and (c) vertical velocity in the middle of the ABL. The colored line at the bottom of the panels indicates the SST with blue representing cold SST (296.55 K) and red warm SST (298.05 K). The cold-to-warm and warm-to-cold fronts are located at X = 5 km and X = 25 km respectively
 
 ## 1. Introduction 
 
