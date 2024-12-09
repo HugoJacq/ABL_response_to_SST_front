@@ -228,9 +228,13 @@ radio_decay_sensitivity/
     └───FICHIERS_OUT/
         |   NU40m.1.003.OUT.001.nc
 ```
-Finally, ouputs have been compressed to reduce diskspace with the command
+Finally, ouputs have been compressed to reduce diskspace with the command:
 ```
 ncks -O -7 -L 1 --ppc default=4#PABST=7#RVT=5#THT=6 oldfile newfile
+```
+And packed with the command (for example for S1):
+```
+tar -hzcvf S1.tar.gz S1/
 ```
 
 You now have the data necessary to post process the simulation !
