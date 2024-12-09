@@ -244,11 +244,12 @@ You now have the data necessary to post process the simulation !
 
 Packages necessary to run the post process (the version indicated is the one I used) :
 
-- Python  (3.11.8)
-- Xarray (with dask) (2024.2.0)
-- SciPy (1.12)
-- Matplotlib (3.6.3)
-- Numpy (1.26.4)
+- Python  (3.10.10)
+- Xarray (with dask) (2024.10.0)
+- SciPy (1.14.1)
+- Matplotlib (3.9.2)
+- Numpy (2.1.3)
+- cmocean (4.0.3)
   
 ### 3.2 What is the plan ?
 Plotting the figures requires some data post processing. In a first time, a few files are built. Then data from those files are used to plot the figures.
