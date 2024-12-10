@@ -1,7 +1,7 @@
 &NAM_CONFZ MPI_BUFFER_SIZE=200 /
 &NAM_CONFIO LCDF4=.TRUE.,LLFIOUT=.FALSE., LLFIREAD=.FALSE. /
 &NAM_DIMn_PRE  NIMAX=768,	! Nx
-               NJMAX=40 / 	! Ny
+               NJMAX=160 / 	! Ny
 &NAM_VER_GRID NKMAX=160,
               YZGRID_TYPE='FUNCTN', !option manual et prescrire une grille vert.
               ZDZGRD=2.,	! zGrid size at bottom

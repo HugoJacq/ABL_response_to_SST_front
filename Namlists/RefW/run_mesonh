@@ -20,6 +20,7 @@ hostname
 #. /home/jacqhugo/MNH-V5-6-2/conf/profile_mesonh-LXgfortran-R8I4-MNH-V5-6-2-2tracers_SBGinOUT-MPIAUTO-DEBUG
 
 mkdir -p FICHIERS_OUT
+cp EXSEG1.nam.long EXSEG1.nam
 
 
 set -e
