@@ -21,6 +21,7 @@ hostname
 
 mkdir -p FICHIERS_OUT
 
+cp EXSEG1.nam.long EXSEG1.nam
 
 set -e
 #export MPIRUN="Mpirun -np 30 --map-by :OVERSUBSCRIBE" # 512
