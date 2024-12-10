@@ -1,6 +1,5 @@
 # To be used with analyse.py 
 import xarray as xr
-import pandas as pd
 import numpy as np
 import os
 import pathlib
@@ -526,7 +525,7 @@ def movie_coherent_structures_cleaner(X,Y,Z,dsCS1,dsmean,dataSST,SEUIL_ML,ini_t,
 	RV,RVm = dsCS1.RVT,dsmean.RVTm
 	THT,THTm = dsCS1.THTV,dsmean.THTVm
 	# getting advection velocity : for now is = constant
-	ABLH = 600 	# m
+	ABLH = ABLH_S1 	# m
 	dt = 30 	# s, OUT frequency
 	dx = 50		# m, horizontal res
 	indzzi = nearest(Z.values,1*ABLH)
@@ -647,166 +646,6 @@ def movie_coherent_structures_cleaner(X,Y,Z,dsCS1,dsmean,dataSST,SEUIL_ML,ini_t,
 	print(' Building movie with the following cmd:')
 	print('ffmpeg -framerate '+str(fps)+' -start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save2+'movie_clean_C10.mp4')
 
-def movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save):
-	"""
-	This procedure is plotting the images needed to build a movie of the coherent structures evolution
-	
-	INPUTS:
-		- X			: X dimension of the sim
-		- Y			: Y dimension of the sim
-		- Z			: Z dimension of the sim
-		- L_TURB_COND : Choice of conditional sampling (C10 or ITURB2)
-		- dataSST	: 1D SST(x)
-		- SEUIL_ML	: thetav threshold to detect mixed layer
-		- ini_t 	: integer, index of time. instant of interested to start from
-		- ini_x 	: integer, index of ni. X position of interested to start from
-		- tmin 		: how far back in time to look 
-		- tmax 		: how far forward in time to look
-		- fps 		: movie frame per seconde
-		- stepy 	: vector field : skipping cells Y
-		- stepz 	: vector field : skipping cells Z
-		- Awidth 	: vector field : arrow width
-		- scale 	: vector field : size of arrows
-		- path_save : where to save images/movie
-		
-	OUPUTS : 
-		- images to build the movie
-		- command line to build the movie (with ffmpeg)
-	"""	
-	
-	ds = xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN.nc',chunks=chunksNOHALO)
-	# getting global objects
-	u_f = ds.UT-ds.UTm
-	v_f = ds.VT-ds.VTm
-	w_f = ds.WT-ds.WTm
-	sv1_f = ds.SV1-ds.SV1m
-	sv4_f = ds.SV4-ds.SV4m
-	sv3_f = ds.SV3-ds.SV3m
-	gTHTV = ds.THTVm[0,:,0,:].differentiate('level')
-	RV,RVm = ds.RVT,ds.RVTm
-	# getting advection velocity : for now is constant
-	ABLH = 600 	# m
-	dt = 30 	# s, OUT frequency
-	dx = 50		# m, horizontal res
-	indzzi = nearest(Z.values,1*ABLH)
-	U = 6.53 # m/s, = dsmean.Um.isel(level=slice(0,indzzi)).mean(dim='ni').integrate('level') / ABLH
-	fetch = int(np.round(U*dt/dx,0)) # to get integer
-	
-	# test : does the intg. advection velocity changes along x ? and if yes how much ?
-	# TBD
-	
-	for TURB_COND in L_TURB_COND:
-		path_save2 = path_save + 'T'+str(tmin)+'-T'+str(tmax)+'_t'+str(ini_t)+'_i'+str(ini_x)+'/'
-		path_save_frames = path_save2 + 'frames_'+TURB_COND+'/'
-		if not pathlib.Path(path_save_frames).is_dir():
-			os.makedirs(path_save_frames)
-		if TURB_COND=='C10':
-			obj = ds.global_objects
-			cmap = c.ListedColormap(['white','r','purple','g','grey','orange','pink'])
-			c_range = np.arange(0,7,1)
-			c_label = ['other','up','ss','down','env','up2','ss2']
-			obj_max = 6.5
-			
-		print('	TURB_COND=',TURB_COND,'ini_t=',ini_t,'ini_x=',ini_x,'U=',U,',fetch=',fetch)
-		L_t = np.zeros(tmax-tmin+1,dtype=np.int32)
-		L_f = np.zeros(tmax-tmin+1,dtype=np.int32)
-		RVmixed = np.zeros(tmax-tmin+1)
-		
-		print('	looking back up to tmin')
-		t = ini_t
-		f = ini_x
-		while t >= tmin:
-			indx = f 
-			print('		time,indx =',t,indx)
-			# computing rvmixed(x)
-			ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
-			RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
-			L_t[t-tmin] = t
-			L_f[t-tmin] = f
-			t = t-1
-			f = indx - fetch
-			if f==0: f = 768-1 # cyclic condition
-			
-		print('	looking forward up to tmax')
-		t = ini_t
-		f = ini_x
-		while t <= tmax:
-			indx = f 
-			print('		time,indx =',t,indx)
-			# computing rvmixed(x)
-			ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
-			RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
-			
-			L_t[t-tmin] = t
-			L_f[t-tmin] = f
-			t = t+1
-			f = indx + fetch
-			if f==768-1: f = 0 # cyclic condition
-		# Plot	
-		print('	Plotting ...')
-		for t in L_t:
-			indx = L_f[t-tmin]
-			fig = plt.figure(figsize = (15,8),layout="constrained",dpi=200)
-			gs = GridSpec(4, 8, figure=fig)
-			# -> SST
-			ax1 = fig.add_subplot(gs[3,:])
-			ax1.plot(X/1000,dataSST,c='k')
-			ax1.scatter(X[indx]/1000,dataSST[indx],marker='x',c='k')
-			ax1.set_ylabel('SST (K)')
-			ax1.set_xlabel('X (km)')
-			# -> obj
-			ax2 = fig.add_subplot(gs[0:3,0:2])
-			s = ax2.pcolormesh( Y/1000,Z/ABLH,obj[t,:,:,indx],cmap=cmap,vmin=-0.5,vmax=obj_max)
-			Q = ax2.quiver(Y[::stepy]/1000,Z[::stepz]/ABLH,v_f[t,::stepz,::stepy,indx],w_f[t,::stepz,::stepy,indx],
-					angles='uv',pivot='middle',width=Awidth,headwidth=3,headaxislength=2,headlength=2,scale=scale)
-			cbar = plt.colorbar(s,ax=ax2,pad=0.05,orientation='horizontal',aspect=10)
-			cbar.set_ticks(c_range)
-			cbar.ax.set_xticklabels(c_label,rotation=45)
-			ax2.set_aspect(2.0)
-			ax2.quiverkey(Q, 0.05, 0.9, 1, '1 m/s', labelpos='E',coordinates='figure',angle=0) # Reference arrow horizontal
-			ax2.set_ylabel('z/zi')
-			ax2.set_ylim([0,1.2])
-			ax2.set_title('objects',loc='right')
-			# -> surface tracers
-			ax3 = fig.add_subplot(gs[0:3,2:4])
-			linthresh = 0.01
-			vmextrm = 10
-			rounding = 2 # this is linthresh = 10^(-rounding)
-			sfx_tracer = xr.where(ds.SV1>ds.SV4,sv1_f.where(sv1_f>0),-sv4_f.where(sv4_f>0))
-			NORM = c.SymLogNorm(linthresh=linthresh, linscale=0.03,vmin=-vmextrm, vmax=vmextrm, base=10)
-			s = ax3.pcolormesh( Y/1000,Z/ABLH, sfx_tracer[t,:,:,indx],cmap='PuOr',norm=NORM) # 
-			cb = plt.colorbar(s,ax=ax3,pad=0.05,orientation='horizontal',aspect=10)
-			major_loc = np.round(cb.get_ticks(),rounding)
-			minor_loc = Minor_ticks_symLog(major_loc,linthresh)
-			if linthresh in cb.get_ticks():
-				major_loc = np.delete(major_loc,[len(major_loc)//2-1,len(major_loc)//2+1])
-			cb.set_ticks(minor_loc,minor=True)
-			cb.set_ticks(major_loc)
-			cb.set_ticklabels([str(np.abs(np.round(tick,rounding))) for tick in major_loc])
-			ax3.set_ylim([0,1.2])
-			ax3.set_aspect(2.0)
-			ax3.set_title('surface tracers',loc='right')
-			# -> top tracer
-			ax4 = fig.add_subplot(gs[0:3,4:6])
-			s = ax4.pcolormesh( Y/1000,Z/ABLH, sv3_f[t,:,:,indx],cmap='Blues',vmin=0.1,vmax=500,norm="log")
-			plt.colorbar(s,ax=ax4,pad=0.05,orientation='horizontal',aspect=10)
-			ax4.set_ylim([0,1.2])
-			ax4.set_aspect(2.0)
-			ax4.set_title('top tracer',loc='right')
-			# -> rvmixed
-			ax5 = fig.add_subplot(gs[0:3,6:])
-			s = ax5.pcolormesh( Y/1000,Z/ABLH, (RV-RVmixed[t-tmin])[t,:,:,indx]*1000,cmap='BrBG',vmin=-1,vmax=1)
-			plt.colorbar(s,ax=ax5,pad=0.05,orientation='horizontal',aspect=10)
-			ax5.set_ylim([0,1.2])
-			ax5.set_aspect(2.0)
-			ax5.set_title(r'r$_v$ - r$_{v,mixed}$',loc='right')
-			fig.suptitle('obj '+TURB_COND+', t='+str(t)+', i='+str(indx))
-			fig.savefig(path_save_frames+f"{t:03}"+'.png')
-			plt.close(fig)
-		# building movie
-		print(' Building movie with the following cmd:')
-		print('ffmpeg -framerate '+str(fps)+' -start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save2+'movie_'+TURB_COND+'.mp4')
-		#os.system('ffmpeg -framerate '+str(fps)+'-start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save+'movie.mp4')
 
 def CS_m_sensitivity(X,Z,CHOIX,data,data_mean,dsflx,TURB_COND,L_choice,chunksNOHALO,i,t,atX,path_save,path_CS1,dpi):
 	"""This procedure is looking at the sensitivity of TURB_COND conditional sampling to m
@@ -3474,6 +3313,167 @@ def C10_downdraft_detection_change(X,Z,Y,abs_path,chunksOUT,chunksNOHALO,nhalo,d
 	ds.close()
 	ds2.close()
 
+def movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save):
+	"""
+	This procedure is plotting the images needed to build a movie of the coherent structures evolution
+	
+	INPUTS:
+		- X			: X dimension of the sim
+		- Y			: Y dimension of the sim
+		- Z			: Z dimension of the sim
+		- L_TURB_COND : Choice of conditional sampling (C10 or ITURB2)
+		- dataSST	: 1D SST(x)
+		- SEUIL_ML	: thetav threshold to detect mixed layer
+		- ini_t 	: integer, index of time. instant of interested to start from
+		- ini_x 	: integer, index of ni. X position of interested to start from
+		- tmin 		: how far back in time to look 
+		- tmax 		: how far forward in time to look
+		- fps 		: movie frame per seconde
+		- stepy 	: vector field : skipping cells Y
+		- stepz 	: vector field : skipping cells Z
+		- Awidth 	: vector field : arrow width
+		- scale 	: vector field : size of arrows
+		- path_save : where to save images/movie
+		
+	OUPUTS : 
+		- images to build the movie
+		- command line to build the movie (with ffmpeg)
+	"""	
+	
+	ds = xr.open_dataset('DATA_turb/S1_CS1_S1_C10_SVTMEAN.nc',chunks=chunksNOHALO)
+	# getting global objects
+	u_f = ds.UT-ds.UTm
+	v_f = ds.VT-ds.VTm
+	w_f = ds.WT-ds.WTm
+	sv1_f = ds.SV1-ds.SV1m
+	sv4_f = ds.SV4-ds.SV4m
+	sv3_f = ds.SV3-ds.SV3m
+	gTHTV = ds.THTVm[0,:,0,:].differentiate('level')
+	RV,RVm = ds.RVT,ds.RVTm
+	# getting advection velocity : for now is constant
+	ABLH = 600 	# m
+	dt = 30 	# s, OUT frequency
+	dx = 50		# m, horizontal res
+	indzzi = nearest(Z.values,1*ABLH)
+	U = 6.53 # m/s, = dsmean.Um.isel(level=slice(0,indzzi)).mean(dim='ni').integrate('level') / ABLH
+	fetch = int(np.round(U*dt/dx,0)) # to get integer
+	
+	# test : does the intg. advection velocity changes along x ? and if yes how much ?
+	# TBD
+	
+	for TURB_COND in L_TURB_COND:
+		path_save2 = path_save + 'T'+str(tmin)+'-T'+str(tmax)+'_t'+str(ini_t)+'_i'+str(ini_x)+'/'
+		path_save_frames = path_save2 + 'frames_'+TURB_COND+'/'
+		if not pathlib.Path(path_save_frames).is_dir():
+			os.makedirs(path_save_frames)
+		if TURB_COND=='C10':
+			obj = ds.global_objects
+			cmap = c.ListedColormap(['white','r','purple','g','grey','orange','pink'])
+			c_range = np.arange(0,7,1)
+			c_label = ['other','up','ss','down','env','up2','ss2']
+			obj_max = 6.5
+			
+		print('	TURB_COND=',TURB_COND,'ini_t=',ini_t,'ini_x=',ini_x,'U=',U,',fetch=',fetch)
+		L_t = np.zeros(tmax-tmin+1,dtype=np.int32)
+		L_f = np.zeros(tmax-tmin+1,dtype=np.int32)
+		RVmixed = np.zeros(tmax-tmin+1)
+		
+		print('	looking back up to tmin')
+		t = ini_t
+		f = ini_x
+		while t >= tmin:
+			indx = f 
+			print('		time,indx =',t,indx)
+			# computing rvmixed(x)
+			ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
+			RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
+			L_t[t-tmin] = t
+			L_f[t-tmin] = f
+			t = t-1
+			f = indx - fetch
+			if f==0: f = 768-1 # cyclic condition
+			
+		print('	looking forward up to tmax')
+		t = ini_t
+		f = ini_x
+		while t <= tmax:
+			indx = f 
+			print('		time,indx =',t,indx)
+			# computing rvmixed(x)
+			ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
+			RVmixed[t-tmin] = ( RVm.isel(level=slice(ind1,ind2+1),ni=indx,time=0,nj=0).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
+			
+			L_t[t-tmin] = t
+			L_f[t-tmin] = f
+			t = t+1
+			f = indx + fetch
+			if f==768-1: f = 0 # cyclic condition
+		# Plot	
+		print('	Plotting ...')
+		for t in L_t:
+			indx = L_f[t-tmin]
+			fig = plt.figure(figsize = (15,8),layout="constrained",dpi=200)
+			gs = GridSpec(4, 8, figure=fig)
+			# -> SST
+			ax1 = fig.add_subplot(gs[3,:])
+			ax1.plot(X/1000,dataSST,c='k')
+			ax1.scatter(X[indx]/1000,dataSST[indx],marker='x',c='k')
+			ax1.set_ylabel('SST (K)')
+			ax1.set_xlabel('X (km)')
+			# -> obj
+			ax2 = fig.add_subplot(gs[0:3,0:2])
+			s = ax2.pcolormesh( Y/1000,Z/ABLH,obj[t,:,:,indx],cmap=cmap,vmin=-0.5,vmax=obj_max)
+			Q = ax2.quiver(Y[::stepy]/1000,Z[::stepz]/ABLH,v_f[t,::stepz,::stepy,indx],w_f[t,::stepz,::stepy,indx],
+					angles='uv',pivot='middle',width=Awidth,headwidth=3,headaxislength=2,headlength=2,scale=scale)
+			cbar = plt.colorbar(s,ax=ax2,pad=0.05,orientation='horizontal',aspect=10)
+			cbar.set_ticks(c_range)
+			cbar.ax.set_xticklabels(c_label,rotation=45)
+			ax2.set_aspect(2.0)
+			ax2.quiverkey(Q, 0.05, 0.9, 1, '1 m/s', labelpos='E',coordinates='figure',angle=0) # Reference arrow horizontal
+			ax2.set_ylabel('z/zi')
+			ax2.set_ylim([0,1.2])
+			ax2.set_title('objects',loc='right')
+			# -> surface tracers
+			ax3 = fig.add_subplot(gs[0:3,2:4])
+			linthresh = 0.01
+			vmextrm = 10
+			rounding = 2 # this is linthresh = 10^(-rounding)
+			sfx_tracer = xr.where(ds.SV1>ds.SV4,sv1_f.where(sv1_f>0),-sv4_f.where(sv4_f>0))
+			NORM = c.SymLogNorm(linthresh=linthresh, linscale=0.03,vmin=-vmextrm, vmax=vmextrm, base=10)
+			s = ax3.pcolormesh( Y/1000,Z/ABLH, sfx_tracer[t,:,:,indx],cmap='PuOr',norm=NORM) # 
+			cb = plt.colorbar(s,ax=ax3,pad=0.05,orientation='horizontal',aspect=10)
+			major_loc = np.round(cb.get_ticks(),rounding)
+			minor_loc = Minor_ticks_symLog(major_loc,linthresh)
+			if linthresh in cb.get_ticks():
+				major_loc = np.delete(major_loc,[len(major_loc)//2-1,len(major_loc)//2+1])
+			cb.set_ticks(minor_loc,minor=True)
+			cb.set_ticks(major_loc)
+			cb.set_ticklabels([str(np.abs(np.round(tick,rounding))) for tick in major_loc])
+			ax3.set_ylim([0,1.2])
+			ax3.set_aspect(2.0)
+			ax3.set_title('surface tracers',loc='right')
+			# -> top tracer
+			ax4 = fig.add_subplot(gs[0:3,4:6])
+			s = ax4.pcolormesh( Y/1000,Z/ABLH, sv3_f[t,:,:,indx],cmap='Blues',vmin=0.1,vmax=500,norm="log")
+			plt.colorbar(s,ax=ax4,pad=0.05,orientation='horizontal',aspect=10)
+			ax4.set_ylim([0,1.2])
+			ax4.set_aspect(2.0)
+			ax4.set_title('top tracer',loc='right')
+			# -> rvmixed
+			ax5 = fig.add_subplot(gs[0:3,6:])
+			s = ax5.pcolormesh( Y/1000,Z/ABLH, (RV-RVmixed[t-tmin])[t,:,:,indx]*1000,cmap='BrBG',vmin=-1,vmax=1)
+			plt.colorbar(s,ax=ax5,pad=0.05,orientation='horizontal',aspect=10)
+			ax5.set_ylim([0,1.2])
+			ax5.set_aspect(2.0)
+			ax5.set_title(r'r$_v$ - r$_{v,mixed}$',loc='right')
+			fig.suptitle('obj '+TURB_COND+', t='+str(t)+', i='+str(indx))
+			fig.savefig(path_save_frames+f"{t:03}"+'.png')
+			plt.close(fig)
+		# building movie
+		print(' Building movie with the following cmd:')
+		print('ffmpeg -framerate '+str(fps)+' -start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save2+'movie_'+TURB_COND+'.mp4')
+		#os.system('ffmpeg -framerate '+str(fps)+'-start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save+'movie.mp4')
+
 
 def One_frame_from_movieCS_C10vsITURB2(X,Y,Z,chunksNOHALO,L_atX,stepy,stepz,indt,SEUIL_ML,path_save,dpi):
 	"""
@@ -3550,15 +3550,89 @@ def One_frame_from_movieCS_C10vsITURB2(X,Y,Z,chunksNOHALO,L_atX,stepy,stepz,indt
 		fig.savefig(path_save2)	
 			
 
+def Snapshots_CS_and_moisture(dsO,dsmean,dsCS1,dico_snap,vectors_param,SEUIL_ML,path_save,dpi):
+	"""
+	This function plots snapshots of the coherent structures with the humidity anomaly.
+
+	INPUTS:
+		-
+	OUTPUTS:
+		-
+	"""
+	os.system('mkdir -p '+path_save)
+
+	Z = dsO.level[nhalo:-nhalo]
+	Y = dsO.nj[nhalo:-nhalo]
+	dsO['VT'] = dsO.VT.rename(new_name_or_name_dict={'ni_v':'ni'})
+	V = dsO.VT.interp({'nj_v':dsO.nj}).isel(ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo))
+	W = dsO.WT.interp({'level_w':dsO.level}).isel(ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo))
+	RVT = dsO.RVT.isel(ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo))
+	THTVm = dsmean.THTvm
+	RVTm = dsmean.RVTm
+	v_fluc,w_fluc = V-dsmean.Vm,W-dsmean.Wm
 	
+	gTHTV = THTVm.differentiate('level')
+
+	stepy,stepz = vectors_param['stepy'],vectors_param['stepz']
+	Awidth = vectors_param['Awidth']
+	scale = vectors_param['scale']
 	
-	
+	obj = dsCS1.global_objects # 0 -> 6
+	unity = xr.ones_like(obj)
+	zeros = unity - 1
+	cmap = c.ListedColormap(['white','r','purple','orange','pink','g',])
+	c_range = np.arange(0,6,1)
+	c_label = ['other','up','ss','up2','ss2','down']
+	obj_max = 5.5
+	obj_clean = obj
+	obj_clean = xr.where(obj==1,unity,zeros) # updrafts
+	obj_clean = xr.where(obj==2,2*unity,obj_clean) # ss
+	obj_clean = xr.where(obj==5,3*unity,obj_clean) # updrafts 2
+	obj_clean = xr.where(obj==6,4*unity,obj_clean) # ss2
+	obj_clean = xr.where(obj==3,5*unity,obj_clean) # downdrafts
 
+	namesave = path_save+'SnapshotC10'
 
+	fig, ax = plt.subplots(len(dico_snap),2,figsize = (7.5,5*len(dico_snap)),constrained_layout=True,dpi=dpi)
+	for k,name in enumerate(dico_snap.keys()):
+		indx = dico_snap[name]['indx']
+		indt = dico_snap[name]['indt']
+		YMAX = dico_snap[name]['YMAX']
+		YMIN = dico_snap[name]['YMIN']
+		namesave = namesave + '_t'+str(indt)+'_x'+str(indx)+'_and'
+		# mixed layer indexes
+		ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
+		RVmixed = ( RVTm.isel(level=slice(ind1,ind2+1),ni=indx).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
 
-
-
-
+		# objects
+		s = ax[k,0].pcolormesh( Y/1000,Z/ABLH_S1,obj_clean[indt,:,:,indx],cmap=cmap,vmin=-0.5,vmax=obj_max)
+		Q = ax[k,0].quiver(Y[::stepy]/1000,Z[::stepz]/ABLH_S1,v_fluc[indt,::stepz,::stepy,indx],w_fluc[indt,::stepz,::stepy,indx],
+				angles='uv',pivot='middle',width=Awidth,headwidth=3,headaxislength=2,headlength=2,scale=scale)
+		if k == len(dico_snap.keys())-1:
+			cbar = plt.colorbar(s,ax=ax[k,0],pad=0.05,orientation='horizontal',aspect=10)
+			cbar.set_ticks(c_range)
+			cbar.ax.set_xticklabels(c_label,rotation=45)
+			ax[k,0].set_xlabel('Y (km)')
+		ax[k,0].set_aspect(2.0)
+		ax[k,0].quiverkey(Q, 0.43, 0.1, 1, '1 m/s', labelpos='E',coordinates='figure',angle=0) # Reference arrow horizontal
+		ax[k,0].set_ylabel(r'z/$z_i$')
+		ax[k,0].set_ylim([0,1.2])
+		ax[k,0].set_xlim([YMIN/1000,YMAX/1000])
+		
+		ax[k,0].set_title('objects',loc='right')
+		# moisture anomaly
+		s = ax[k,1].pcolormesh( Y/1000,Z/ABLH_S1, (RVT-RVmixed)[indt,:,:,indx]*1000,cmap='BrBG',vmin=-1,vmax=1)
+		if k == len(dico_snap.keys())-1:
+			plt.colorbar(s,ax=ax[k,1],pad=0.05,orientation='horizontal',aspect=10)
+			ax[k,1].set_xlabel('Y (km)')
+		ax[k,1].set_ylim([0,1.2])
+		ax[k,1].set_xlim([YMIN/1000,YMAX/1000])
+		ax[k,1].set_aspect(2.0)
+		ax[k,1].tick_params(axis='both',labelleft=False)
+		ax[k,1].set_title(r'r$_v$ - r$_{v,mixed}$ (g.kg$^{-1}$)',loc='right')
+	namesave = namesave[:-4]+'.png'
+	fig.savefig(namesave)
+	#plt.close(fig)
 
 
 

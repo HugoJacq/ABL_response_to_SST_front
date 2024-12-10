@@ -40,7 +40,7 @@ from dask.distributed import Client,LocalCluster
 # Figure selector
 BUILD = True
 DASHBOARD = False 	# set to 'False' when building files.
-NUM_FIG = 1  		# number from 1 to 11, or 'A1' or 'S1' or -1 for all figures
+NUM_FIG = 1  		# number from 1 to 12, or 'S1' or 'REV1' or -1 for all figures
 
 #pathWORKDIR = '/home/jacqhugo/files_for_zenodo_CanalSim/canal_sim_submitted/DATA/'
 pathWORKDIR = '/home/jacqhugo/files_for_zenodo_CanalSim/canal_sim_rev1/DATA/'
@@ -162,7 +162,7 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 
 	# global variables (+ see module_cst.py)
 	crit_value = 297.3 # K, = (296.55+296.55+1.5)/2
-	dataSST = dsB.SST[1,nhalo:-nhalo].values
+	dataSST = dsINI.SST[1,nhalo:-nhalo].values
 	N_timeB = dsB.time.shape[0]
 	N_timeO = dsO.time.shape[0]
 	X,X_u,X_v = dsB.ni[nhalo:-nhalo],dsB.ni_u[nhalo:-nhalo],dsB.ni_v[nhalo:-nhalo]
@@ -283,7 +283,7 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 			'w':['w_hadv','w_hturb','w_vadv','w_vturb','w_boytotale','w_cor'],
 			'ET':['ET_DIFF','ET_DISS','ET_HADV','ET_VDP','ET_TP'],
 			'tht':['THT_HTURB','THT_HADV','THT_VADV','THT_VTURB']}
-		BORNES = {'u':[-5,4],'v':[-0.0005,0.0005],'w':[-0.005,0.005],'ET':[-0.002,0.002],'tht':[-0.0004,0.0004]}
+		BORNES = {'u':[-4,4],'v':[-0.0005,0.0005],'w':[-0.005,0.005],'ET':[-0.002,0.002],'tht':[-0.0004,0.0004]}
 		COLORS = {'TEND':'k','hadv':'sienna','vadv':'tan','pres':'blue','vturb':'green','hturb':'chartreuse','cor':'orange','boy':'red','boytotale':'red',
 				'DIFF':'blue','DISS':'magenta','HADV':'sienna','VDP':'green','TP':'red','HTURB':'chartreuse','VTURB':'green','VADV':'tan','HADV':'sienna'}
 		X_BUDGET_HAND(dataSST,dsB,ds_hbudget,X,Z,height,VAR_BU,COLORS,BORNES,factor,path_budget_hand,dpi)
@@ -301,12 +301,12 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 		D_SST = 1 				# order of derivative of SST
 		S_SST = -1 				# sign of SST
 		atZ = 10 				# m, height of CHOICE
-		PRESET = 'PA'		# for paper: either 'paper' (figure) or 'DMM' or 'DMMtau' (linear regression coeff) or 'PA'
+		PRESET = 'paper'		# for paper: either 'paper' (figure) or 'DMM' or 'DMMtau' (linear regression coeff) or 'PA' (low correlation)
 		res = 50 				# m
 		V_INTEG = False 		# vertical integration or not
 		UPFRONT_ONLY = True 	# compute correlation with only the 1st front
 		#
-		Corr_atZ_AllInOne(X,Z,dsmean,dsB.SST[1,nhalo:-nhalo],CHOICE,D_VAR,D_SST,S_SST,atZ,V_INTEG,UPFRONT_ONLY,PRESET,res,path_save,dpi)
+		Corr_atZ_AllInOne(X,Z,dsmean,dataSST,CHOICE,D_VAR,D_SST,S_SST,atZ,V_INTEG,UPFRONT_ONLY,PRESET,res,path_save,dpi)
 		#
 		#-------------------------------------
 	# ====================================================================
@@ -387,7 +387,7 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 		#########
 		# Fig.7 Snapshot of S1
 		#########
-		if NUM_FIG==7 or NUM_FIG==-1: #or NUM_FIG==-1:
+		if NUM_FIG==7: #or NUM_FIG==-1:
 			print('	- Mean flow advected coherent strutures: a movie')
 			#
 			# Advection of structures : building the history of a structure based on a advection velocity
@@ -402,29 +402,46 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 			# so the fetch to get the previous cell at t - dt(=30s) is approximately U*30s/dx = 4
 			#
 			# Note : t*=15min => tmax-tmin should be around 30 to capture ascent and descent of a convective structure
-			
-			L_TURB_COND = ['C10'] # 'C10','ITURB2'
-			ini_t = 120 # 120 		# in index of time, instant of interested to start from, = ncview -1
-			ini_x = 395 		# in index of ni, location of the structure to start from
-			tmin = 60		# how far back in time to look 
-			tmax = 120 # 120  		# how far forward in time to look
-			fps = 5			# movie frame per seconde
-			stepy,stepz = 2,2 	# vector field : skipping cells 
-			Awidth = 0.005			# vector field : arrow width
-			scale = 20			# vector field : size of arrows
-			path_save = path_outpng + 'object_videos/'
-			case = 'clean' 		# 'clean': less things on the plot
-			#
-			movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
+			if False: # this build a full movie
+				L_TURB_COND = ['C10'] # 'C10','ITURB2'
+				ini_t = 120 # 120 		# in index of time, instant of interested to start from, = ncview -1
+				ini_x = 395 		# in index of ni, location of the structure to start from
+				tmin = 60		# how far back in time to look 
+				tmax = 120 # 120  		# how far forward in time to look
+				fps = 5			# movie frame per seconde
+				stepy,stepz = 2,2 	# vector field : skipping cells 
+				Awidth = 0.005			# vector field : arrow width
+				scale = 20			# vector field : size of arrows
+				path_save = path_outpng + 'object_videos/'
+				case = 'clean' 		# 'clean': less things on the plot
+				#
+				movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
 
-			# if case=='clean': # up/down obj, rv and SST
-			# 	movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
-			# elif case=='both':
-			# 	movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
-			# 	movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
-			# elif case=='full': # all obj, sv1,sv4,sv3,rv and SST
-			# 	movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
-			#
+				# if case=='clean': # up/down obj, rv and SST
+				# 	movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
+				# elif case=='both':
+				# 	movie_coherent_structures_cleaner(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
+				# 	movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
+				# elif case=='full': # all obj, sv1,sv4,sv3,rv and SST
+				# 	movie_coherent_structures(X,Y,Z,chunksNOHALO,L_TURB_COND,dataSST,SEUIL_ML,ini_t,ini_x,tmin,tmax,fps,stepy,stepz,Awidth,scale,path_save)
+				#
+
+			if True: # this build only snapshots
+				TURB_COND='C10'
+				vectors_param = {'stepy':2, 	# vector field : skipping cells
+					 			'stepz':2,
+								'Awidth':0.005, # vector field : arrow width
+								'scale':20} 	# vector field : size of arrows
+				# OUI dico_snap = {1:{'indt':60,'indx':243,'YMIN':4000,'YMAX':6000},
+				# 			2:{'indt':86,'indx':337,'YMIN':4000,'YMAX':6000}}
+				# NON dico_snap = {1:{'indt':99,'indx':250,'YMIN':3000,'YMAX':5000},
+				# 			2:{'indt':120,'indx':334,'YMIN':3000,'YMAX':5000}}
+				dico_snap = {1:{'indt':60,'indx':243,'YMIN':4000,'YMAX':6000},
+				 			2:{'indt':86,'indx':338,'YMIN':4000,'YMAX':6000}}
+				dsCS1 = xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_'+CHOIX+'_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)
+				path_save = path_outpng + 'object_videos/snapshots/'
+				Snapshots_CS_and_moisture(dsO,dsmean,dsCS1,dico_snap,vectors_param,SEUIL_ML,path_save,dpi)
+
 			#--------------------------------------------------					
 		#########
 		# Fig.9 Characteristics of updrafts
@@ -523,9 +540,9 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 			#--------------------------------------------------
 			
 	# ===================================================
-	# Fig.11 Exploring the 'thermal overshoot'
+	# Fig.13 Exploring the 'thermal overshoot'
 	# ===================================================
-	if NUM_FIG==11 or NUM_FIG==-1:
+	if NUM_FIG==13 or NUM_FIG==-1:
 		print(' * Exploring the thermal overshoot')	
 		if True:
 			# this is in paper (background of recap)
@@ -539,7 +556,7 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 		if True:
 			# This is in paper		
 			# plotting a few velocity profil for the recap
-			Lx = [4.0,13.0,23.0] # km
+			Lx = [4.0,13,23.0] # km
 			Lindx = [nearest(X.values,Xpos*1000) for Xpos in Lx]
 			linewidth = 3
 			alpha = 1
@@ -578,7 +595,7 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 
 	# BEWARE: this part is done with a simulation with Ly=2km (and not Ly = 8km) !!!
 
-	if NUM_FIG=='S1' or NUM_FIG==-1:
+	if NUM_FIG=='S1':
 		print('BEWARE: this part is done with a simulation with Ly=2km (and not Ly = 8km) !!!')
 		print('Be sure that you have run the right simulations')
 
@@ -684,17 +701,15 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 								}
 		
 
-		# ici attention il faut enlever les références à S1 !
-
 		# Roll factor
 		if False: 
 			print('* Computing the Roll factor from Salesky 2017')
-			
+			dsCS1 = xr.open_dataset('DATA_turb/'+CHOIX+'_CS1_'+CHOIX+'_C10_SVTMEAN_m1.nc',chunks=chunksNOHALO)
 			VAR = 'UT'
-			atZi = -10 # 0.1
+			atZi = -10 # if <0, then its the altitude, if >0 then its z/zi
 			dsO = xr.open_mfdataset(path_OUT['S1_Ly8km'] + L_OUT['S1_Ly8km'])
 			dsO_i = mass_interpolator(dsO,chunksNOHALO_interp)
-			RollFactor(VAR,atZi,dico_dsO_i['S1_Ly8km'],dico_dsrefO,path_save_png,dpi)
+			RollFactor(VAR,atZi,dsCS1,dico_dsrefO,dsmean,path_save_png,dpi)
 			
 		# Looking at North/South flow : coriolis or better mixing (turbulent) ?
 		if False:
@@ -832,8 +847,9 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 			print(' * Entrainment rate for referecences')
 			CENTER_DTHTV = 'ABLH' # MIN_FLX or ABLH
 			#
-			entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save_png,dpi)
+			entrainment_velocity(X,Z,CENTER_DTHTV,dsO,dsflx,dsmean,dsref,path_save_png,dpi)
 	
+
 	plt.show()
 	dsB.close()
 	dsO.close()

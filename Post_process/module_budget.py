@@ -370,6 +370,11 @@ def X_BUDGET_HAND(dataSST,dsB,ds_hbudget,X,Z,height,VAR_BU,COLORS,BORNES,Factor,
 			ax[k].yaxis.label.set_fontsize(13)
 		ax[-1].legend(fontsize=11,loc='lower right')
 		
+		# zones
+		ax[0].vlines(5,-4,4,colors='k',linestyles='--')
+		ax[0].vlines(15,-4,4,colors='k',linestyles='--')
+		ax[0].vlines(25,-4,4,colors='k',linestyles='--')
+
 		fig.savefig(path_budget_hand+'X_'+var+'.png')	
 		
 		

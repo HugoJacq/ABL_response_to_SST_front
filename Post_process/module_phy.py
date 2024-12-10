@@ -89,7 +89,6 @@ def FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,
 	print('Zi: S1,cold,warm:',zi,zi_c,zi_w)
 		
 	print('	- Last instant XY')
-	Xsplit = 19 # km
 	indz = np.argmin(np.abs(Z_w.values-height))
 	U = dsB.UT[time,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
 	V = dsB.VT[time,nhalo:-nhalo,nhalo:-nhalo,nhalo:-nhalo]
@@ -97,89 +96,88 @@ def FIRST_LOOK(dataSST,dsINI,dsB,dsmean,dsref,dsflx,X,Y,Z,Z_w,time,nhalo,height,
 	Umin,Umax = 4,6
 	Vmin,Vmax = -1,1
 	Wmin,Wmax = -1,1
-	figsize= (4,10)	 	
+	figsize= (4,10)	 
 
-	# fig, ax = plt.subplots(6,1,figsize = figsize,constrained_layout=True,dpi=dpi)
-	# # U
-	# s = ax[0].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
-	# ax[0].set_xlim([0,Xsplit])
-	# s = ax[1].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
-	# ax[1].set_xlim([Xsplit,X[-1]/1000])
-	# fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
-	# # V
-	# s = ax[2].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
-	# ax[2].set_xlim([0,Xsplit])
-	# s = ax[3].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
-	# ax[3].set_xlim([Xsplit,X[-1]/1000])
-	# fig.colorbar(s, ax=ax[2:4], shrink=0.6,pad = 0.01)
-	# # W
-	# s = ax[4].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
-	# ax[4].set_xlim([0,Xsplit])
-	# s = ax[5].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
-	# ax[5].set_xlim([Xsplit,X[-1]/1000])
-	# fig.colorbar(s, ax=ax[4:6], shrink=0.6,pad = 0.01)
-	# axis names
-	# ax[0].set_title(r'U (m.s$^{-1}$), z=1m',loc='right')
-	# ax[2].set_title(r'V (m.s$^{-1}$), z=1m',loc='right')
-	# ax[4].set_title(r'W (m.s$^{-1}$), z='+str(height)+'m',loc='right')
-	# ax[5].set_xlabel('X (km)')
-	# for axe in ax.flatten():
-	# 	axe.set_aspect('equal')
-	# 	axe.set_ylabel('Y (km)')
-	# 	axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
-	# 	axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
-	# 	Add_SST_bar(X.values/1000,Y.values/1000,2,dataSST,axe) # add SST front representation
-	# fig.savefig(path_save+'LastTime_UVW_XY.png')
-
-	figsize= (4,4)
-	# U
-	fig, ax = plt.subplots(2,1,figsize = (4,4),constrained_layout=True,dpi=dpi)
-	s = ax[0].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
-	ax[0].set_xlim([0,Xsplit])
-	s = ax[1].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
-	ax[1].set_xlim([Xsplit,X[-1]/1000])
-	fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
-	ax[0].set_title(r'U (m.s$^{-1}$), z=1m',loc='right')
-	ax[1].set_xlabel('X (km)')
-	for axe in ax.flatten():
-		axe.set_aspect('equal')
-		axe.set_ylabel('Y (km)')
-		axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
-		axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
-		Add_SST_bar(X.values/1000,Y.values/1000,3,dataSST,axe) # add SST front representation
-	fig.savefig(path_save+'LastTime_UVW_XY_U.png')
-	# V
-	fig, ax = plt.subplots(2,1,figsize = (4,4),constrained_layout=True,dpi=dpi)
-	s = ax[0].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
-	ax[0].set_xlim([0,Xsplit])
-	s = ax[1].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
-	ax[1].set_xlim([Xsplit,X[-1]/1000])
-	fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
-	ax[0].set_title(r'V (m.s$^{-1}$), z=1m',loc='right')
-	ax[1].set_xlabel('X (km)')
-	for axe in ax.flatten():
-		axe.set_aspect('equal')
-		axe.set_ylabel('Y (km)')
-		axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
-		axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
-		Add_SST_bar(X.values/1000,Y.values/1000,3,dataSST,axe) # add SST front representation
-	fig.savefig(path_save+'LastTime_UVW_XY_V.png')
-	# W
-	fig, ax = plt.subplots(2,1,figsize = (4,4),constrained_layout=True,dpi=dpi)
-	s = ax[0].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
-	ax[0].set_xlim([0,Xsplit])
-	s = ax[1].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
-	ax[1].set_xlim([Xsplit,X[-1]/1000])
-	fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
-	ax[0].set_title(r'W (m.s$^{-1}$), z='+str(height)+'m',loc='right')
-	ax[1].set_xlabel('X (km)')
-	for axe in ax.flatten():
-		axe.set_aspect('equal')
-		axe.set_ylabel('Y (km)')
-		axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
-		axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
-		Add_SST_bar(X.values/1000,Y.values/1000,3,dataSST,axe) # add SST front representation
-	fig.savefig(path_save+'LastTime_UVW_XY_W.png')
+	if True:
+		figsize= (8,8.1)	 
+		fig, ax = plt.subplots(3,1,figsize = figsize,constrained_layout=True,dpi=dpi)
+		# U
+		s = ax[0].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
+		ax[0].set_xlim([0,X[-1]/1000])
+		fig.colorbar(s, ax=ax[0], shrink=0.3,pad = 0.05,orientation='horizontal',aspect=40)
+		# V
+		s = ax[1].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
+		ax[1].set_xlim([0,X[-1]/1000])
+		fig.colorbar(s, ax=ax[1], shrink=0.3,pad = 0.05,orientation='horizontal',aspect=40)
+		# W
+		s = ax[2].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
+		ax[2].set_xlim([0,X[-1]/1000])
+		fig.colorbar(s, ax=ax[2], shrink=0.3,pad = 0.05,orientation='horizontal',aspect=40)
+		# axis names
+		ax[0].set_title(r'U (m.s$^{-1}$), z=1m',loc='right')
+		ax[1].set_title(r'V (m.s$^{-1}$), z=1m',loc='right')
+		ax[2].set_title(r'W (m.s$^{-1}$), z='+str(height)+'m',loc='right')
+		for axe in ax.flatten():
+			axe.set_aspect('equal')
+			axe.set_ylabel('Y (km)')
+			axe.set_xlabel('X (km)')
+			axe.xaxis.set_major_locator(ticker.MultipleLocator(5))
+			axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
+			Add_SST_bar(X.values/1000,Y.values/1000,4,dataSST,axe) # add SST front representation
+		fig.savefig(path_save+'LastTime_UVW_XY_lanes.png')
+	
+	# LAST TIME SPLIT IN 2
+	if False: 
+		Xsplit = 19 # km
+		figsize= (4,4)
+		# U
+		fig, ax = plt.subplots(2,1,figsize = (4,4),constrained_layout=True,dpi=dpi)
+		s = ax[0].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
+		ax[0].set_xlim([0,Xsplit])
+		s = ax[1].pcolormesh(X/1000,Y/1000,U[0,:,:],cmap='Greys_r',vmin=Umin,vmax=Umax)
+		ax[1].set_xlim([Xsplit,X[-1]/1000])
+		fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
+		ax[0].set_title(r'U (m.s$^{-1}$), z=1m',loc='right')
+		ax[1].set_xlabel('X (km)')
+		for axe in ax.flatten():
+			axe.set_aspect('equal')
+			axe.set_ylabel('Y (km)')
+			axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
+			axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
+			Add_SST_bar(X.values/1000,Y.values/1000,3,dataSST,axe) # add SST front representation
+		fig.savefig(path_save+'LastTime_UVW_XY_U_split.png')
+		# V
+		fig, ax = plt.subplots(2,1,figsize = (4,4),constrained_layout=True,dpi=dpi)
+		s = ax[0].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
+		ax[0].set_xlim([0,Xsplit])
+		s = ax[1].pcolormesh(X/1000,Y/1000,V[0,:,:],cmap=cmocean.cm.curl,vmin=Vmin,vmax=Vmax)
+		ax[1].set_xlim([Xsplit,X[-1]/1000])
+		fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
+		ax[0].set_title(r'V (m.s$^{-1}$), z=1m',loc='right')
+		ax[1].set_xlabel('X (km)')
+		for axe in ax.flatten():
+			axe.set_aspect('equal')
+			axe.set_ylabel('Y (km)')
+			axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
+			axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
+			Add_SST_bar(X.values/1000,Y.values/1000,3,dataSST,axe) # add SST front representation
+		fig.savefig(path_save+'LastTime_UVW_XY_V_split.png')
+		# W
+		fig, ax = plt.subplots(2,1,figsize = (4,4),constrained_layout=True,dpi=dpi)
+		s = ax[0].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
+		ax[0].set_xlim([0,Xsplit])
+		s = ax[1].pcolormesh(X/1000,Y/1000,W[indz,:,:],cmap='seismic',vmin=Wmin,vmax=Wmax)
+		ax[1].set_xlim([Xsplit,X[-1]/1000])
+		fig.colorbar(s, ax=ax[0:2], shrink=0.6,pad = 0.01)
+		ax[0].set_title(r'W (m.s$^{-1}$), z='+str(height)+'m',loc='right')
+		ax[1].set_xlabel('X (km)')
+		for axe in ax.flatten():
+			axe.set_aspect('equal')
+			axe.set_ylabel('Y (km)')
+			axe.xaxis.set_major_locator(ticker.MultipleLocator(2))
+			axe.yaxis.set_major_locator(ticker.MultipleLocator(2))
+			Add_SST_bar(X.values/1000,Y.values/1000,3,dataSST,axe) # add SST front representation
+		fig.savefig(path_save+'LastTime_UVW_XY_W_split.png')
 
 	print('	- Mean fields XZ') # no V bc no use
 	U0 = dsmean.Um[:,0]
@@ -464,7 +462,6 @@ def PROFILES_AT_X_THTV_THVWFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,Q0_atX,NOR
 	ind_Q0_atX = np.argmin(np.abs(X.values-Q0_atX))
 	indt_c = -1 # app. the same instant as S1
 	indt_w = -1 # app. the same instant as S1
-	ABLH=600 # m
 	
 	THT_c = dsref['cold']['nomean']['Mean']['MEAN_TH'][indt_w,:]
 	THT_w = dsref['warm']['nomean']['Mean']['MEAN_TH'][indt_w,:]
@@ -473,7 +470,7 @@ def PROFILES_AT_X_THTV_THVWFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,Q0_atX,NOR
 	THTV_c = Compute_THTV(THT_c,RV_c) 
 	THTV_w = Compute_THTV(THT_w,RV_w)
 
-	zi,zi_c,zi_w = (  ABLH, 
+	zi,zi_c,zi_w = (  ABLH_S1, 
 			Z[int(np.argmax(THT_c.differentiate('level_les').values))].values,
 			Z[int(np.argmax(THT_w.differentiate('level_les').values))].values   ) # max of Dtheta/dz
 
@@ -806,10 +803,10 @@ def Corr_atZ_AllInOne(X,Z,dsmean,SST,CHOICE,D_VAR,D_SST,S_SST,atZ,V_INTEG,UPFRON
 		X1 = SST
 		nameSST,nicenameSST = 'SST', 'SST'
 	if D_SST==1:
-		X1 = SST.differentiate('ni')
+		X1 = np.gradient(SST,50)
 		nameSST,nicenameSST = 'gSST', r'$\bigtriangledown$SST'
 	elif D_SST==2:
-		X1 = SST.differentiate('ni').differentiate('ni')
+		X1 = np.gradient(np.gradient(SST,50),50)
 		nameSST,nicenameSST = 'ggSST', r'$\bigtriangleup$SST'
 		
 	if S_SST==-1:
@@ -841,7 +838,7 @@ def Corr_atZ_AllInOne(X,Z,dsmean,SST,CHOICE,D_VAR,D_SST,S_SST,atZ,V_INTEG,UPFRON
 		VAR2 = dsmean['Tau'].differentiate('ni')
 		name1,nicename1 = 'gU10', r'$\partial_x$U$_{10}$'
 		name2,nicename2 = 'gTau', r'$\partial_x \tau$'
-		X1 = SST.differentiate('ni')
+		X1 = np.gradient(SST,50)
 		nameSST,nicenameSST = 'gSST', r'$dSST$/$dx$' # r'$\frac{dSST}{dx}$'
 		
 		indx_borne = nearest(X.values,23*1000)
@@ -850,12 +847,12 @@ def Corr_atZ_AllInOne(X,Z,dsmean,SST,CHOICE,D_VAR,D_SST,S_SST,atZ,V_INTEG,UPFRON
 		VAR1 = VAR1[:indx_borne]
 		VAR2 = VAR2[:indx_borne]
 		
-		rho1 = RCorr_nocyclic(VAR1.values,X1.values)
+		rho1 = RCorr_nocyclic(VAR1.values,X1)
 		indlag1 = np.argmax(rho1)
 		X1_rolled1 = np.roll(X1,indlag1)
 		print('corr max for gU10 is ',np.max(rho1))
 		print('lagmax for gU10 is ',indlag1*res/1000,'km')
-		rho2 = RCorr_nocyclic(VAR2.values,X1.values)
+		rho2 = RCorr_nocyclic(VAR2.values,X1)
 		indlag2 = np.argmax(rho2)
 		X1_rolled2 = np.roll(X1,indlag2)
 		print('corr max for gTau is ',np.max(rho2))
@@ -890,10 +887,15 @@ def Corr_atZ_AllInOne(X,Z,dsmean,SST,CHOICE,D_VAR,D_SST,S_SST,atZ,V_INTEG,UPFRON
 		for axe in [ax,ax2,ax3]:
 			yabs_max = abs(max(axe.get_ylim(), key=abs))
 			axe.set_ylim(ymin=-yabs_max/2, ymax=yabs_max)
-		
+		ax.grid()
 		#ax.legend()		
 		fig.savefig(SaveName)
 		
+		fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+		ax.plot(X[:indx_borne]/1000,np.gradient(VAR1.values,50))
+		ax.set_xlabel('X')
+		ax.set_ylabel('dx2 U10')
+
 	else:	
 		if UPFRONT_ONLY:
 			# here only the cold-to-warm is taken into account
@@ -1037,8 +1039,58 @@ def Corr_atZ_AllInOne(X,Z,dsmean,SST,CHOICE,D_VAR,D_SST,S_SST,atZ,V_INTEG,UPFRON
 	#		ax.set_title(nicename + r'= $\alpha$' + nicenameSST)
 	#		fig.savefig(path_save+'regCoeff_'+string_integ+name+'_'+nameSST+'_atz'+str(atZ)+'m.png')	
 	
+def T_OVERSHOOT_FLX_WTHTV(X,Z,dataSST,dsflx,dsmean,liste_x,Q0_atX,path_save,dpi):
+	"""This procedure is plotting a slice of the vertical flux of virtual
+		potential temperature and total turbulent kinetic energy
+		with profiles at differents X positions
+	"""
+	indx = []
+	indxQ0 = np.argmin(np.abs(X.values-Q0_atX))
+	for x in range(len(liste_x)):
+		indx.append(np.argmin(np.abs(X.values-liste_x[x]*1000)))
+
+	Qnorme = dsflx.FLX_THvW[0,indxQ0]
+	bornes = [-1,3]
+	nameflx = r"$< w  \theta_v >/Q_v^*$"
+	ETnorme = dsmean.u_star[indxQ0]**2
+	UWnorme = dsmean.u_star[indxQ0]**2
+	bornesET = [1,10]
+	nameET = 'TKE/u*²'
+	zi=600
+	nameZ = r'z/z$_i$'
+	nameX = 'X (km)'
+	bornesZ = [0,1.2]
+		
+	FLX = dsflx.FLX_THvW/Qnorme
+	ET = dsmean.ETm/ETnorme
+	UW = dsflx.FLX_UW/UWnorme
+	# FLX plot
+	axes = []
+	fig, ax = plt.subplots(1,1,figsize = (10,4),constrained_layout=True,dpi=dpi)
+	s = ax.pcolormesh(X/1000,Z/zi,FLX,cmap=cmocean.cm.thermal,vmin=bornes[0],vmax=bornes[1])
+	Add_SST_bar(X/1000,Z/zi,4,dataSST,ax)
+	plt.colorbar(s,ax=ax,pad=0.005)
+	ax.set_ylim(bornesZ)
+	ax.set_ylabel(nameZ)
+	ax.set_xlabel(nameX)
+	ax.set_title(nameflx)
+	fig.savefig(path_save+'flx_wthtv.png')
+	# FLX plot
+	axes = []
+	fig, ax = plt.subplots(1,1,figsize = (10,4),constrained_layout=True,dpi=dpi)
+	s = ax.pcolormesh(X/1000,Z/zi,UW,cmap=cmocean.cm.matter_r,vmin=-1.5,vmax=0.2)
+	Add_SST_bar(X/1000,Z/zi,4,dataSST,ax)
+	plt.colorbar(s,ax=ax,pad=0.005)
+	ax.set_ylim(bornesZ)
+	ax.set_ylabel(nameZ)
+	ax.set_xlabel(nameX)
+	ax.set_title(r"$< uw >/u^{*2}$")
+	fig.savefig(path_save+'flx_uw.png')
+
+	# ET plot
+
 # after rev1
-def RollFactor(VAR,atZi,dsO_i,dico_dsrefO,path_save,dpi):
+def RollFactor(VAR,atZi,dsO_i,dico_dsrefO,dsmean,path_save,dpi):
 	"""
 	Computes the Roll Factor from Salesky et al. 2017. And plot the variable + the polar autocorrelation function
 
@@ -1072,34 +1124,68 @@ def RollFactor(VAR,atZi,dsO_i,dico_dsrefO,path_save,dpi):
 
 	print('		-> variable:',VAR,'altitude:',nameZ)
 
-	dico = {'cold SST':{'var':dsO_i[VAR][0],
+	dico = {'cold SST':{'var':dsO_i[VAR][-1],
 								'altitude':atZc,
 								'ni_slice':coldslice,
-								'nice_name':'cold'},
-			'warm SST':{'var':dsO_i[VAR][0],
+								'nice_name':'cold',
+								'zi':zi_c},
+			'warm SST':{'var':dsO_i[VAR][-1],
 								'altitude':atZw,
 								'ni_slice':warmslice,
-								'nice_name':'warm'},
-			'ref cold SST':{'var': dsCref[VAR][0],
+								'nice_name':'warm',
+								'zi':zi_w},
+			'ref cold SST':{'var': dsCref[VAR][-1],
 								'altitude':atZi*531,
 								'ni_slice':slice(0,8000),
-								'nice_name':'Refcold'},
-			'ref warm SST':{'var': dsWref[VAR][0],
+								'nice_name':'Refcold',
+								'zi':531},
+			'ref warm SST':{'var': dsWref[VAR][-1],
 								'altitude':atZi*710,
 								'ni_slice':slice(0,8000),
-								'nice_name':'Refwarm'},
+								'nice_name':'Refwarm',
+								'zi':710},
 			}
 
 	for case in dico.keys():
 		ni_slice = dico[case]['ni_slice']
 		altitude = dico[case]['altitude']
 		nicename = dico[case]['nice_name']
+		ZI = dico[case]['zi']
 		W = dico[case]['var'].sel(ni=ni_slice).sel(level=altitude,method='nearest')
 		units = W.attrs['units']
 		W = W - W.mean()
 		R_ww,lag_tht,lag_r = Corr_in_polar(W,res)
 		R = Roll_factor(R_ww,lag_r,zi=600) 
 		print('Roll factor is ('+case+')=',R)
+
+		# roll direction for cold cases
+		if (case=='cold SST' or case=='ref cold SST') and VAR=='UT':
+			if case=='cold SST':
+				z,m = dsmean['Um'].sel(ni=ni_slice),dsmean['Vm'].sel(ni=ni_slice)
+				z = z.sel(level=slice(0,ZI)).mean(['ni'])
+				m = m.sel(level=slice(0,ZI)).mean(['ni'])
+			elif case=='ref cold SST':
+				z,m = dsCref['UT'][-1],dsCref['VT'][-1]
+				z = z.sel(level=slice(0,ZI)).mean(['ni','nj'])
+				m = m.sel(level=slice(0,ZI)).mean(['ni','nj'])
+			# mean wind in the ABL
+			zonal = z.sel(level=slice(0,ZI)).integrate('level') / ZI
+			merid = m.sel(level=slice(0,ZI)).integrate('level') / ZI
+			alpha1 = np.mod(np.arctan(zonal/merid).values*180/np.pi + 90,180)
+			print('		zonal wind, merid wind (m/s)',zonal.values,merid.values)
+			ind_r = nearest(lag_r,ZI/2)
+			Ntht = len(lag_tht)
+			alpha2 = np.mod(lag_tht[ np.argmax(R_ww[:,ind_r])]*180/np.pi + 90,180)
+
+			fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+			ax.plot(lag_tht*180/np.pi,R_ww[:,ind_r])
+			ax.set_xlabel('lag tht (°)')
+			ax.set_ylabel('R_ww')
+			ax.set_title(case)
+
+			print('		Wind direction (from East, positive clockwise) is:',alpha1,'(°)')
+			print('		Roll direction (from East, positive clockwise) is:',alpha2,'(°)')
+
 		fig, ax = plt.subplots(1,2,figsize = (10,5),constrained_layout=True,dpi=dpi)
 		s = ax[0].pcolormesh(W.ni/1000,W.nj/1000,W,cmap='seismic',vmin=VARmin,vmax=VARmax)
 		plt.colorbar(s,ax=ax[0])
@@ -1456,7 +1542,7 @@ def PROFILES_AT_X_THT_THWFLX(dataSST,dsflx,dsmean,dsref,X,Z,X_liste,Q0_atX,NORM,
 	# #ax.set_xlim([-0.1,1.4])
 	# fig.savefig(path_save+'ProfilesX_TH_WTH_atX.png')
 
-def entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save,dpi):
+def entrainment_velocity(X,Z,CENTER_DTHTV,dsO,dsflx,dsmean,dsref,path_save,dpi):
 	"""
 	This procedure is plotting:
 		- mean ABL height (along X)
@@ -1467,6 +1553,7 @@ def entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save,dpi):
 		- X: X dimension
 		- Z: Z dimension
 		- CENTER_DTHTV: 'ABLH' or 'MIN_FLX', middle of the jump of thtv
+		- dsO : file with instantaneous ouputs
 		- dsflx: custom built file with mean flux
 		- dsmean: custom built file with mean prog. variables
 		- dsref: mean profiles for reference homogeneous simulations
@@ -1524,7 +1611,7 @@ def entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save,dpi):
 	print(we_c,we_w)
 
 
-	# Height of ABL along X
+	# Height of ABL along X: U.dzi/dx
 	L_indz = thtv_hand.differentiate('level').sel(level=slice(0,900)).argmax('level').values # altitude of max gradient thtv
 	ABLH_x = Z[L_indz].values
 	Nx = len(ABLH_x)
@@ -1537,6 +1624,37 @@ def entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save,dpi):
 	print('Uadv',Uadv)
 	smoothed = savitzky_golay(ABLH_x, window_size=WSIZE, order=ORD, deriv=0, rate=1/50)
 	
+	# Height of ABL along X: dzi/dt
+	# argmaxthtv_time = Compute_THTV(dsO.THT.isel(level=slice(nhalo,-nhalo),
+	# 										 ni=slice(nhalo,-nhalo),
+	# 										 nj=slice(nhalo,-nhalo)),
+	# 								dsO.RVT.isel(level=slice(nhalo,-nhalo),
+	# 										 ni=slice(nhalo,-nhalo),
+	# 										 nj=slice(nhalo,-nhalo))
+	# 								).mean('nj'
+	# 								).differentiate('level'
+	# 					 			).sel(level=slice(0,900)
+	# 								).argmax('level').values
+	# zi_time = np.zeros((len(dsO.time),Nx))
+	# print(argmaxthtv_time)
+	# for t in range(len(dsO.time)):
+	# 	zi_time[t,:] = Z[argmaxthtv_time[t]].values
+
+	# 	# Nx = len(ABLH_x2)
+	# 	# ABLH_x_3 = np.zeros(3*Nx)
+	# 	# ABLH_x_3[:Nx] = ABLH_x2
+	# 	# ABLH_x_3[Nx:2*Nx] = ABLH_x2
+	# 	# ABLH_x_3[2*Nx:3*Nx] = ABLH_x2
+	# 	# dzidt[t,:] = savitzky_golay(ABLH_x_3, window_size=WSIZE, order=ORD, deriv=0, rate=1/50)[Nx:2*Nx]
+	# dzidt = np.gradient(zi_time,30,axis=0).mean(axis=0)
+	
+	# print(dzidt)
+	# ABLH_x_3 = np.zeros(3*Nx)
+	# ABLH_x_3[:Nx] = dzidt
+	# ABLH_x_3[Nx:2*Nx] = dzidt
+	# ABLH_x_3[2*Nx:3*Nx] = dzidt
+	# dzidt_smoothed = savitzky_golay(ABLH_x_3, window_size=WSIZE, order=ORD, deriv=0, rate=1/50)[Nx:2*Nx]
+
 	# Computing dthtv
 	L_n_inversion = [2,3,4,5] # number of cell around inversion height (ABLH_x) 
 	color = ['cyan','green','orange','purple']
@@ -1580,6 +1698,8 @@ def entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save,dpi):
 	ax.hlines( 0,X[0]/1000,X[-1]/1000,colors='grey',linestyles='--')
 	ax.hlines( we_c*100,X[0]/1000,X[-1]/1000,colors='b',label='refC')
 	ax.hlines( we_w*100,X[0]/1000,X[-1]/1000,colors='r',label='refW')
+	#ax.plot( X/1000,dzidt*100,c='grey',label='dzi/dt',ls='--')
+	#ax.plot( X/1000,dzidt_smoothed*100,c='k',label='dzi/dt',ls='--')
 	ax.plot( X/1000, Uadv*dHdx*100,c='k',label='U.dzi/dx')
 	print('zimax for S1 (cm/s):',np.max(Uadv*dHdx*100))
 	smoothed_minflx = savitzky_golay(wthtv, window_size=WSIZE, order=ORD, deriv=0, rate=1/50)
@@ -1589,7 +1709,9 @@ def entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save,dpi):
 	ax.set_xlabel('X (km)')
 	ax.set_ylabel('we (cm/s)')
 	ax.legend()
+	ax.set_ylim([-3.5,3.5])
 	#ax.set_title('savgol(w,o,d)=('+str(WSIZE)+','+str(ORD)+',1)')
+	ax.grid()
 	fig.savefig(path_save+'entrainment_rate_'+CENTER_DTHTV+'.png')
 
 	# checking that delta_THTV is well around the altitude of min(wthtv)
@@ -1629,6 +1751,34 @@ def entrainment_velocity(X,Z,CENTER_DTHTV,dsflx,dsmean,dsref,path_save,dpi):
 	ax.set_xlabel(r'$\theta_v$ and $\Delta \theta_v$')
 	ax2.set_xlabel(r'$<w\theta_v>$ at X=24km')
 	fig.savefig(path_save+'checking_at_X24km'+CENTER_DTHTV+'.png')
+
+
+	# Computing dthtv for ref at last instant
+	print('estimate of we for RefW')
+	L_n_inversion = [1,2,3,4,5] # number of cell around inversion height (ABLH_x) 
+	color = ['blue','cyan','green','orange','purple']
+	deltaTHTV = np.zeros(len(L_n_inversion))					
+	if CENTER_DTHTV == 'MIN_FLX': # chosing where to compute the dthtv
+		mid = WTHV_w[-1].sel(level_les=slice(0,900)).argmin('level_les').values
+	elif CENTER_DTHTV == 'ABLH':
+		mid = THTV_w[-1].differentiate('level_les').sel(level_les=slice(0,900)).argmax('level_les').values # altitude of max gradient thtv
+	for k,dz in enumerate(L_n_inversion):
+		borne_up = mid+dz
+		borne_down = mid-dz
+		thtv_z2 = THTV_w[-1,borne_up].values
+		thtv_z1 = THTV_w[-1,borne_down].values
+		deltaTHTV[k] =  thtv_z2 -  thtv_z1
+
+	fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+	for k,dz in enumerate(L_n_inversion):
+		print('k',L_n_inversion[k],'we cm/s',-np.min(WTHV_w[-1].values)/deltaTHTV[k]*100)
+		ax.hlines(-np.min(WTHV_w[-1])/deltaTHTV[k]*100,-1,0,colors=color[k],label=r'$\pm$ '+str(dz)+' cell (RefW)')
+	ax.hlines( we_w*100,-1,0,colors='r',label='RefW')
+	ax.set_ylabel('we (cm/s)')
+	ax.legend()
+	ax.set_ylim([-4.5,4.5])
+	ax.set_xlim([-1,1])
+	fig.savefig(path_save+'we_estimate_for_RefW.png')
 # End in paper -----------------
 
 	
@@ -2479,55 +2629,6 @@ def ANOMALY_WIND_AND_THTV(X,Z,dsmean,dsINI,theta_levels,path_save,cmapU,dpi):
 	ax.set_ylabel('Altitude (m)')
 	ax.set_title('mean thetav - thtvref in colors')
 	
-def T_OVERSHOOT_FLX_WTHTV(X,Z,dataSST,dsflx,dsmean,liste_x,Q0_atX,path_save,dpi):
-	"""This procedure is plotting a slice of the vertical flux of virtual
-		potential temperature and total turbulent kinetic energy
-		with profiles at differents X positions
-	"""
-	indx = []
-	indxQ0 = np.argmin(np.abs(X.values-Q0_atX))
-	for x in range(len(liste_x)):
-		indx.append(np.argmin(np.abs(X.values-liste_x[x]*1000)))
-
-	Qnorme = dsflx.FLX_THvW[0,indxQ0]
-	bornes = [-1,3]
-	nameflx = r"$< w  \theta_v >/Q_v^*$"
-	ETnorme = dsmean.u_star[indxQ0]**2
-	UWnorme = dsmean.u_star[indxQ0]**2
-	bornesET = [1,10]
-	nameET = 'TKE/u*²'
-	zi=600
-	nameZ = r'z/z$_i$'
-	nameX = 'X (km)'
-	bornesZ = [0,1.2]
-		
-	FLX = dsflx.FLX_THvW/Qnorme
-	ET = dsmean.ETm/ETnorme
-	UW = dsflx.FLX_UW/UWnorme
-	# FLX plot
-	axes = []
-	fig, ax = plt.subplots(1,1,figsize = (10,4),constrained_layout=True,dpi=dpi)
-	s = ax.pcolormesh(X/1000,Z/zi,FLX,cmap=cmocean.cm.thermal,vmin=bornes[0],vmax=bornes[1])
-	Add_SST_bar(X/1000,Z/zi,4,dataSST,ax)
-	plt.colorbar(s,ax=ax,pad=0.005)
-	ax.set_ylim(bornesZ)
-	ax.set_ylabel(nameZ)
-	ax.set_xlabel(nameX)
-	ax.set_title(nameflx)
-	fig.savefig(path_save+'flx_wthtv.png')
-	# FLX plot
-	axes = []
-	fig, ax = plt.subplots(1,1,figsize = (10,4),constrained_layout=True,dpi=dpi)
-	s = ax.pcolormesh(X/1000,Z/zi,UW,cmap=cmocean.cm.matter_r,vmin=-1.5,vmax=0.2)
-	Add_SST_bar(X/1000,Z/zi,4,dataSST,ax)
-	plt.colorbar(s,ax=ax,pad=0.005)
-	ax.set_ylim(bornesZ)
-	ax.set_ylabel(nameZ)
-	ax.set_xlabel(nameX)
-	ax.set_title(r"$< uw >/u^{*2}$")
-	fig.savefig(path_save+'flx_uw.png')
-
-	# ET plot
 
 def PLOT_FLUXES(X,Z,liste_x,liste_z,dsflx,dsref,B_FLXTOTAL,B_HEIGHT_OF_SWITCH,path_save,dpi):
 	"""This procedure is giving a first look of the fluxes,
