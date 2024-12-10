@@ -4,8 +4,6 @@
 
 **Figure 2.** Snapshot at t=+3h of (a) zonal and (b) meridional wind at first model level and (c) vertical velocity in the middle of the ABL. The colored line at the bottom of the panels indicates the SST with blue representing cold SST (296.55 K) and red warm SST (298.05 K). The cold-to-warm and warm-to-cold fronts are located at X = 5 km and X = 25 km respectively.
 
-## 1. Introduction 
-
 [1. Introduction ](#1-introduction)
 
 [2. Producing the data](#2-producing-the-data)
@@ -17,6 +15,8 @@
 [3. Plotting the figures](#3-plotting-the-figures)
 
 [Licence and contact](#licence-and-contact)
+
+## 1. Introduction 
 
 This repo contains scripts, namlists and everything needed to reproduce figures from the paper "Atmosphere Response To An Oceanic Sub-mesoscale SST Front" avalaible [here](DOI to be added).
 Steps to reproduce the simulations are detailed, but you will need a strong computer ! I used 512 CPUs for the simulations. You can also directly download data from zenodo : [part1](https://zenodo.org/records/13321541), [part2](https://zenodo.org/records/13321835). Scripts and Namlists are also [archived](https://zenodo.org/records/13341468).
