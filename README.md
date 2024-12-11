@@ -280,10 +280,10 @@ If you reuse this work, please cite it ! This repository is under MIT license, Z
 
 (here citation paper when accepted)
 
-Jacquet, H. (2024). Output of simulations for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis": Part 1 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13321541
+Jacquet, H. (2024). Output of simulations for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis": Part 1 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13321540
 
-Jacquet, H. (2024). Output of simulations for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis": Part 2 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13321835
+Jacquet, H. (2024). Output of simulations for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis": Part 2 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13321834
 
-Jacquet, H. (2024). Scripts and namlists for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis". Zenodo. https://doi.org/10.5281/zenodo.13341468
+Jacquet, H. (2024). Scripts and namlists for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis". Zenodo. https://doi.org/10.5281/zenodo.13341467
 
 If you have a problem with the code, please open an issue. If you want to discuss science, you can contact me at hugo.jacquet.work[at]gmail.com
