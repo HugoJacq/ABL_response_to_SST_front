@@ -10,6 +10,7 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import MultipleLocator
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import time	
+import matplotlib.ticker as ticker
 # my modules
 from module_cst import *
 from module_tools import *
@@ -645,6 +646,95 @@ def movie_coherent_structures_cleaner(X,Y,Z,dsCS1,dsmean,dataSST,SEUIL_ML,ini_t,
 	# building movie
 	print(' Building movie with the following cmd:')
 	print('ffmpeg -framerate '+str(fps)+' -start_number '+str(tmin)+' -i '+path_save_frames+'%03d.png '+path_save2+'movie_clean_C10.mp4')
+
+def Snapshots_CS_and_moisture(dsO,dsmean,dsCS1,dico_snap,vectors_param,SEUIL_ML,path_save,dpi):
+	"""
+	This function plots snapshots of the coherent structures with the humidity anomaly.
+
+	INPUTS:
+		-
+	OUTPUTS:
+		-
+	"""
+	os.system('mkdir -p '+path_save)
+
+	Z = dsO.level[nhalo:-nhalo]
+	Y = dsO.nj[nhalo:-nhalo]
+	dsO['VT'] = dsO.VT.rename(new_name_or_name_dict={'ni_v':'ni'})
+	V = dsO.VT.interp({'nj_v':dsO.nj}).isel(ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo))
+	W = dsO.WT.interp({'level_w':dsO.level}).isel(ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo))
+	RVT = dsO.RVT.isel(ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo))
+	THTVm = dsmean.THTvm
+	RVTm = dsmean.RVTm
+	v_fluc,w_fluc = V-dsmean.Vm,W-dsmean.Wm
+	
+	gTHTV = THTVm.differentiate('level')
+
+	stepy,stepz = vectors_param['stepy'],vectors_param['stepz']
+	Awidth = vectors_param['Awidth']
+	scale = vectors_param['scale']
+	
+	obj = dsCS1.global_objects # 0 -> 6
+	unity = xr.ones_like(obj)
+	zeros = unity - 1
+	cmap = c.ListedColormap(['white','r','purple','orange','pink','g',])
+	c_range = np.arange(0,6,1)
+	c_label = ['other','up1','ss1','up2','ss2','down']
+	obj_max = 5.5
+	obj_clean = obj
+	obj_clean = xr.where(obj==1,unity,zeros) # updrafts
+	obj_clean = xr.where(obj==2,2*unity,obj_clean) # ss
+	obj_clean = xr.where(obj==5,3*unity,obj_clean) # updrafts 2
+	obj_clean = xr.where(obj==6,4*unity,obj_clean) # ss2
+	obj_clean = xr.where(obj==3,5*unity,obj_clean) # downdrafts
+
+	namesave = path_save+'SnapshotC10'
+
+	fig, ax = plt.subplots(len(dico_snap),2,figsize = (8,5.5*len(dico_snap)),constrained_layout=True,dpi=dpi)
+	for k,name in enumerate(dico_snap.keys()):
+		indx = dico_snap[name]['indx']
+		indt = dico_snap[name]['indt']
+		YMAX = dico_snap[name]['YMAX']
+		YMIN = dico_snap[name]['YMIN']
+		namesave = namesave + '_t'+str(indt)+'_x'+str(indx)+'_and'
+		# mixed layer indexes
+		ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
+		RVmixed = ( RVTm.isel(level=slice(ind1,ind2+1),ni=indx).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
+
+		# objects
+		s = ax[k,0].pcolormesh( Y/1000,Z/ABLH_S1,obj_clean[indt,:,:,indx],cmap=cmap,vmin=-0.5,vmax=obj_max)
+		Q = ax[k,0].quiver(Y[::stepy]/1000,Z[::stepz]/ABLH_S1,v_fluc[indt,::stepz,::stepy,indx],w_fluc[indt,::stepz,::stepy,indx],
+				angles='uv',pivot='middle',width=Awidth,headwidth=3,headaxislength=2,headlength=2,scale=scale)
+		if k == len(dico_snap.keys())-1:
+			cbar = plt.colorbar(s,ax=ax[k,0],pad=0.05,orientation='horizontal',aspect=10)
+			cbar.set_ticks(c_range)
+			cbar.ax.set_xticklabels(c_label,rotation=45)
+		ax[k,0].set_aspect(2.0)
+		ax[k,0].quiverkey(Q, 0.43, 0.10, 1, '1 m/s', labelpos='E',coordinates='figure',angle=0) # Reference arrow horizontal
+		ax[k,0].set_ylabel(r'z/$z_i$')
+		ax[k,0].set_ylim([0,1.2])
+		ax[k,0].set_xlim([YMIN/1000,YMAX/1000])
+		ax[k,0].set_xlabel('Y (km)')
+		ax[k,0].set_title('objects',loc='right')
+		ax[k,1].set_xlabel('Y (km)')
+		# moisture anomaly
+		s = ax[k,1].pcolormesh( Y/1000,Z/ABLH_S1, (RVT-RVmixed)[indt,:,:,indx]*1000,cmap='BrBG',vmin=-1,vmax=1)
+		if k == len(dico_snap.keys())-1:
+			b = plt.colorbar(s,ax=ax[k,1],pad=0.05,orientation='horizontal',aspect=10)
+			b.locator = ticker.MultipleLocator(0.5)
+			b.update_ticks()
+		ax[k,1].set_ylim([0,1.2])
+		ax[k,1].set_xlim([YMIN/1000,YMAX/1000])
+		ax[k,1].set_aspect(2.0)
+		ax[k,1].tick_params(axis='both',labelleft=False)
+		ax[k,1].set_title(r'r$_v$ - r$_{v,mixed}$ (g.kg$^{-1}$)',loc='right')
+	namesave = namesave[:-4]+'.png'
+	for axe in ax.flatten():
+		axe.xaxis.label.set_fontsize(13)
+		axe.yaxis.label.set_fontsize(13)
+		axe.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+	fig.savefig(namesave)
+	#plt.close(fig)
 
 
 def CS_m_sensitivity(X,Z,CHOIX,data,data_mean,dsflx,TURB_COND,L_choice,chunksNOHALO,i,t,atX,path_save,path_CS1,dpi):
@@ -3550,89 +3640,6 @@ def One_frame_from_movieCS_C10vsITURB2(X,Y,Z,chunksNOHALO,L_atX,stepy,stepz,indt
 		fig.savefig(path_save2)	
 			
 
-def Snapshots_CS_and_moisture(dsO,dsmean,dsCS1,dico_snap,vectors_param,SEUIL_ML,path_save,dpi):
-	"""
-	This function plots snapshots of the coherent structures with the humidity anomaly.
-
-	INPUTS:
-		-
-	OUTPUTS:
-		-
-	"""
-	os.system('mkdir -p '+path_save)
-
-	Z = dsO.level[nhalo:-nhalo]
-	Y = dsO.nj[nhalo:-nhalo]
-	dsO['VT'] = dsO.VT.rename(new_name_or_name_dict={'ni_v':'ni'})
-	V = dsO.VT.interp({'nj_v':dsO.nj}).isel(ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo))
-	W = dsO.WT.interp({'level_w':dsO.level}).isel(ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo))
-	RVT = dsO.RVT.isel(ni=slice(nhalo,-nhalo),nj=slice(nhalo,-nhalo),level=slice(nhalo,-nhalo))
-	THTVm = dsmean.THTvm
-	RVTm = dsmean.RVTm
-	v_fluc,w_fluc = V-dsmean.Vm,W-dsmean.Wm
-	
-	gTHTV = THTVm.differentiate('level')
-
-	stepy,stepz = vectors_param['stepy'],vectors_param['stepz']
-	Awidth = vectors_param['Awidth']
-	scale = vectors_param['scale']
-	
-	obj = dsCS1.global_objects # 0 -> 6
-	unity = xr.ones_like(obj)
-	zeros = unity - 1
-	cmap = c.ListedColormap(['white','r','purple','orange','pink','g',])
-	c_range = np.arange(0,6,1)
-	c_label = ['other','up','ss','up2','ss2','down']
-	obj_max = 5.5
-	obj_clean = obj
-	obj_clean = xr.where(obj==1,unity,zeros) # updrafts
-	obj_clean = xr.where(obj==2,2*unity,obj_clean) # ss
-	obj_clean = xr.where(obj==5,3*unity,obj_clean) # updrafts 2
-	obj_clean = xr.where(obj==6,4*unity,obj_clean) # ss2
-	obj_clean = xr.where(obj==3,5*unity,obj_clean) # downdrafts
-
-	namesave = path_save+'SnapshotC10'
-
-	fig, ax = plt.subplots(len(dico_snap),2,figsize = (7.5,5*len(dico_snap)),constrained_layout=True,dpi=dpi)
-	for k,name in enumerate(dico_snap.keys()):
-		indx = dico_snap[name]['indx']
-		indt = dico_snap[name]['indt']
-		YMAX = dico_snap[name]['YMAX']
-		YMIN = dico_snap[name]['YMIN']
-		namesave = namesave + '_t'+str(indt)+'_x'+str(indx)+'_and'
-		# mixed layer indexes
-		ind1,ind2 = get_mixed_layer_indexes(Z,gTHTV[:,indx],SEUIL_ML)		
-		RVmixed = ( RVTm.isel(level=slice(ind1,ind2+1),ni=indx).integrate('level')/ (Z[ind2]-Z[ind1]) ).values
-
-		# objects
-		s = ax[k,0].pcolormesh( Y/1000,Z/ABLH_S1,obj_clean[indt,:,:,indx],cmap=cmap,vmin=-0.5,vmax=obj_max)
-		Q = ax[k,0].quiver(Y[::stepy]/1000,Z[::stepz]/ABLH_S1,v_fluc[indt,::stepz,::stepy,indx],w_fluc[indt,::stepz,::stepy,indx],
-				angles='uv',pivot='middle',width=Awidth,headwidth=3,headaxislength=2,headlength=2,scale=scale)
-		if k == len(dico_snap.keys())-1:
-			cbar = plt.colorbar(s,ax=ax[k,0],pad=0.05,orientation='horizontal',aspect=10)
-			cbar.set_ticks(c_range)
-			cbar.ax.set_xticklabels(c_label,rotation=45)
-			ax[k,0].set_xlabel('Y (km)')
-		ax[k,0].set_aspect(2.0)
-		ax[k,0].quiverkey(Q, 0.43, 0.1, 1, '1 m/s', labelpos='E',coordinates='figure',angle=0) # Reference arrow horizontal
-		ax[k,0].set_ylabel(r'z/$z_i$')
-		ax[k,0].set_ylim([0,1.2])
-		ax[k,0].set_xlim([YMIN/1000,YMAX/1000])
-		
-		ax[k,0].set_title('objects',loc='right')
-		# moisture anomaly
-		s = ax[k,1].pcolormesh( Y/1000,Z/ABLH_S1, (RVT-RVmixed)[indt,:,:,indx]*1000,cmap='BrBG',vmin=-1,vmax=1)
-		if k == len(dico_snap.keys())-1:
-			plt.colorbar(s,ax=ax[k,1],pad=0.05,orientation='horizontal',aspect=10)
-			ax[k,1].set_xlabel('Y (km)')
-		ax[k,1].set_ylim([0,1.2])
-		ax[k,1].set_xlim([YMIN/1000,YMAX/1000])
-		ax[k,1].set_aspect(2.0)
-		ax[k,1].tick_params(axis='both',labelleft=False)
-		ax[k,1].set_title(r'r$_v$ - r$_{v,mixed}$ (g.kg$^{-1}$)',loc='right')
-	namesave = namesave[:-4]+'.png'
-	fig.savefig(namesave)
-	#plt.close(fig)
 
 
 

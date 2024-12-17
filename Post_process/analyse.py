@@ -40,7 +40,7 @@ from dask.distributed import Client,LocalCluster
 # Figure selector
 BUILD = True
 DASHBOARD = False 	# set to 'False' when building files.
-NUM_FIG = 1  		# number from 1 to 12, or 'S1' or 'REV1' or -1 for all figures
+NUM_FIG = 7  		# number from 1 to 12, or 'S1' or 'REV1' or -1 for all figures
 
 #pathWORKDIR = '/home/jacqhugo/files_for_zenodo_CanalSim/canal_sim_submitted/DATA/'
 pathWORKDIR = '/home/jacqhugo/files_for_zenodo_CanalSim/canal_sim_rev1/DATA/'
@@ -848,7 +848,21 @@ if __name__ == "__main__":  # This avoids infinite subprocess creation
 			CENTER_DTHTV = 'ABLH' # MIN_FLX or ABLH
 			#
 			entrainment_velocity(X,Z,CENTER_DTHTV,dsO,dsflx,dsmean,dsref,path_save_png,dpi)
-	
+		# profile of K = dU/dz / <uw>
+		if False:
+			L_x = [8.5,11.5,23]
+			L_ls = ['--','-','-.']
+			Km = - dsflx.FLX_UW / dsmean.Um.differentiate('level')
+
+			fig, ax = plt.subplots(1,1,figsize = (5,5),constrained_layout=True,dpi=dpi)
+			for k,atX in enumerate(L_x):
+				indx = nearest(X.values,atX*1000)
+				ax.plot(Km.isel(ni=indx),Z/ABLH_S1,c='k',ls=L_ls[k],label=str(atX)+' km')
+			ax.set_xlabel('Km (m2/s)')
+			ax.set_ylabel('Z/zi')
+			ax.set_ylim([0,1.2])
+			ax.set_xlim([-4000,4000])
+			ax.legend()
 
 	plt.show()
 	dsB.close()
