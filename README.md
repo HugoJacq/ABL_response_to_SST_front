@@ -1,4 +1,4 @@
-# Atmospheric Response to an Oceanic Sub-mesoscale SST Front : a Coherent Structure Analysis
+# Atmospheric Response to an Oceanic Submesoscale SST Front : a Coherent Structure Analysis
 
 ![alt text](https://github.com/HugoJacq/ABL_response_to_SST_front/blob/main/S1_Ly8km_LastTime_UVW_XY_lanes.png?raw=true)
 
