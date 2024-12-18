@@ -29,7 +29,7 @@ The plan is :
 - Plot the figures (environment, running the scripts)
 
 Diskspace used:
-- about 105Go for the simulations
+- about 105Go for the simulations (compressed)
 - 200Go for the post process
 
 For your information, producing the simulation data emitted 115 kg of equivalent carbon (including tests cases).
