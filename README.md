@@ -278,7 +278,7 @@ Also, please be aware that the figure with the snapshot of two plumes AND the se
 
 If you reuse this work, please cite it ! This repository is under MIT license, Zenodo archives are under Creative Commons Attribution 4.0 International license.
 
-(here citation paper when accepted)
+Jacquet, H., Ayet, A., & Couvreux, F. (2025). Atmosphere response to an oceanic submesoscale SST front: A coherent structure analysis. Journal of Geophysical Research: Atmospheres, 130, e2024JD042312. https://doi.org/10.1029/2024JD042312 
 
 Jacquet, H. (2024). Output of simulations for "Atmosphere Response to an Oceanic Sub-mesoscale SST Front: A Coherent Structure Analysis": Part 1 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13321540
 
